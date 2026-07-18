@@ -27,6 +27,7 @@
 | 08 | [`08_7segment`](08_7segment/08_7segment.ino) | 7세그먼트 기본 | `showNumberDecEx` | **TM1637** (Avishay Orpaz) |
 | 09 | [`09_7segment_timer`](09_7segment_timer/09_7segment_timer.ino) | 7세그 **카운트다운 타이머** | 분:초 표시 + 깜빡임 | TM1637 |
 | 10 | [`10_lcd_countdown`](10_lcd_countdown/10_lcd_countdown.ino) | **LCD 카운트다운 타이머** (1회차 미션) | `lcd.print` + LED 점멸 | LiquidCrystal I2C |
+| 11 | [`11_openmeteo_weather`](11_openmeteo_weather/11_openmeteo_weather.ino) | **바깥 날씨 API** — 안팎 온도 비교 (4회차 심화) | HTTPS GET + JSON | LiquidCrystal I2C · DHT |
 
 ## 공통 규칙 3가지
 
