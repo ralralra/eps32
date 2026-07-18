@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>내 리모컨</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      background: #EDF3FE;
+    }
+    h1 { color: #2E6BE6; }
+    button {
+      font-size: 24px;
+      padding: 20px 40px;
+      margin: 10px;
+      border-radius: 12px;
+      border: none;
+      background: #2E6BE6;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <h1>Team1 리모컨</h1>
+  <p id="status">대기 중</p>
+  <button onclick="ledOn()">LED 켜기</button>
+  <button onclick="ledOff()">LED 끄기</button>
+
+  <script>
+    // onclick="함수()" : 클릭하면 이 함수를 실행하라
+    // id는 요소의 이름표 — JS가 이름표로 요소를 찾아요
+    // ⚠ 아직 진짜 LED는 안 켜져요 — 3회차에 ESP32가 '들어줄 상대(서버)'가 돼요!
+    function ledOn() {
+      document.getElementById("status").innerText = "LED 켜짐!";
+      // 3회차 예고: 여기에 fetch('/led/on') 한 줄이 들어가요
+    }
+    function ledOff() {
+      document.getElementById("status").innerText = "LED 꺼짐";
+    }
+  </script>
+</body>
+</html>

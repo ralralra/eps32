@@ -1,0 +1,15 @@
+# Arduino 빌드/임시
+build/
+*.bin
+*.elf
+*.map
+*.hex
+
+# 에디터/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 비밀 (Wi-Fi 자격증명 등은 따로 두고 싶을 때)
+secrets.h

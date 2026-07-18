@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>출석 체크</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 400px;
+      margin: 0 auto;
+      padding: 2rem;
+      text-align: center;
+    }
+    h1 { color: #2563eb; }
+    input {
+      font-size: 1.2rem;
+      padding: 0.6rem;
+      width: 80%;
+      box-sizing: border-box;
+    }
+    button {
+      font-size: 1.2rem;
+      padding: 0.7rem 2rem;
+      margin-top: 1rem;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 8px;
+    }
+    ul { text-align: left; margin-top: 1.5rem; }
+    li { font-size: 1.1rem; padding: 0.3rem 0; }
+  </style>
+</head>
+<body>
+  <h1>📋 우리 반 출석</h1>
+  <p>이름을 입력하고 출석 버튼을 누르세요</p>
+  <input id="name" placeholder="이름">
+  <br>
+  <button onclick="check()">출석하기</button>
+
+  <h3>출석한 사람</h3>
+  <ul id="list"></ul>
+
+  <script>
+    function check() {
+      // 1) 입력칸에서 이름 가져오기
+      var name = document.getElementById("name").value;
+      if (name === "") {
+        alert("이름을 입력하세요");
+        return;
+      }
+      // 2) 지금 시각 만들기
+      var time = new Date().toLocaleTimeString();
+      // 3) 명단(목록)에 한 줄 추가
+      var li = document.createElement("li");
+      li.textContent = name + " - " + time;
+      document.getElementById("list").appendChild(li);
+      // 4) 입력칸 비우기
+      document.getElementById("name").value = "";
+    }
+  </script>
+</body>
+</html>
