@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="760" viewBox="0 0 1240 760" font-family="Pretendard, Noto Sans CJK KR, sans-serif">
+<rect width="1240" height="760" fill="#ffffff"/>
+<text x="620.0" y="52" font-size="26" font-weight="bold" fill="#1b2536" text-anchor="middle">구글 시트는 탭 2개 — 기록은 시트1, 명령은 설정!</text>
+<text x="620.0" y="80" font-size="15" fill="#56677e" text-anchor="middle">왼쪽 아래 + 버튼으로 새 탭을 만들고 이름을 '설정'으로 — 시트1의 제목 줄은 절대 지우지 마세요</text>
+<rect x="70" y="130" width="560" height="330" rx="10" fill="#f8fafc" stroke="#c9d6e4" stroke-width="2"/>
+<rect x="70" y="130" width="560" height="40" rx="10" fill="#e8eef5"/>
+<text x="86" y="156" font-size="15" font-weight="bold" fill="#1b2536">탭 1 : 시트1 — 데이터 기록 (그대로 두기!)</text>
+<rect x="86" y="186" width="120" height="34" fill="#eef3f9" stroke="#c9d6e4" stroke-width="1"/>
+<text x="146.0" y="209" font-size="13" font-weight="bold" fill="#1b2536" text-anchor="middle">시각</text>
+<rect x="206" y="186" width="80" height="34" fill="#eef3f9" stroke="#c9d6e4" stroke-width="1"/>
+<text x="246.0" y="209" font-size="13" font-weight="bold" fill="#1b2536" text-anchor="middle">온도</text>
+<rect x="286" y="186" width="80" height="34" fill="#eef3f9" stroke="#c9d6e4" stroke-width="1"/>
+<text x="326.0" y="209" font-size="13" font-weight="bold" fill="#1b2536" text-anchor="middle">습도</text>
+<rect x="366" y="186" width="80" height="34" fill="#eef3f9" stroke="#c9d6e4" stroke-width="1"/>
+<text x="406.0" y="209" font-size="13" font-weight="bold" fill="#1b2536" text-anchor="middle">조도</text>
+<rect x="446" y="186" width="80" height="34" fill="#eef3f9" stroke="#c9d6e4" stroke-width="1"/>
+<text x="486.0" y="209" font-size="13" font-weight="bold" fill="#1b2536" text-anchor="middle">소음</text>
+<rect x="86" y="220" width="120" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="146.0" y="243" font-size="13" fill="#1b2536" text-anchor="middle">7/18 14:20</text>
+<rect x="206" y="220" width="80" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="246.0" y="243" font-size="13" fill="#1b2536" text-anchor="middle">25</text>
+<rect x="286" y="220" width="80" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="326.0" y="243" font-size="13" fill="#1b2536" text-anchor="middle">48</text>
+<rect x="366" y="220" width="80" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="406.0" y="243" font-size="13" fill="#1b2536" text-anchor="middle">800</text>
+<rect x="446" y="220" width="80" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="486.0" y="243" font-size="13" fill="#1b2536" text-anchor="middle">120</text>
+<rect x="86" y="254" width="120" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="146.0" y="277" font-size="13" fill="#1b2536" text-anchor="middle">7/18 14:20</text>
+<rect x="206" y="254" width="80" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="246.0" y="277" font-size="13" fill="#1b2536" text-anchor="middle">26</text>
+<rect x="286" y="254" width="80" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="326.0" y="277" font-size="13" fill="#1b2536" text-anchor="middle">47</text>
+<rect x="366" y="254" width="80" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="406.0" y="277" font-size="13" fill="#1b2536" text-anchor="middle">812</text>
+<rect x="446" y="254" width="80" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="486.0" y="277" font-size="13" fill="#1b2536" text-anchor="middle">95</text>
+<rect x="86" y="288" width="120" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="146.0" y="311" font-size="13" fill="#1b2536" text-anchor="middle">(자동으로 계속 쌓임…)</text>
+<rect x="206" y="288" width="80" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="246.0" y="311" font-size="13" fill="#1b2536" text-anchor="middle"></text>
+<rect x="286" y="288" width="80" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="326.0" y="311" font-size="13" fill="#1b2536" text-anchor="middle"></text>
+<rect x="366" y="288" width="80" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="406.0" y="311" font-size="13" fill="#1b2536" text-anchor="middle"></text>
+<rect x="446" y="288" width="80" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="486.0" y="311" font-size="13" fill="#1b2536" text-anchor="middle"></text>
+<rect x="70" y="415" width="560" height="45" fill="#eef1f5"/>
+<text x="86" y="444" font-size="16" fill="#56677e">＋</text>
+<rect x="106" y="415" width="70" height="30" rx="6" fill="#2e7d32"/>
+<text x="141" y="435" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">시트1</text>
+<rect x="184" y="415" width="70" height="30" rx="6" fill="#d5dde6"/>
+<text x="219" y="435" font-size="13" fill="#56677e" text-anchor="middle">설정</text>
+<rect x="650" y="130" width="520" height="330" rx="10" fill="#f8fafc" stroke="#c9d6e4" stroke-width="2"/>
+<rect x="650" y="130" width="520" height="40" rx="10" fill="#e8eef5"/>
+<text x="666" y="156" font-size="15" font-weight="bold" fill="#1b2536">탭 2 : 설정 — 명령 셀 (A1 한 칸만 사용)</text>
+<rect x="666" y="186" width="90" height="34" fill="#eef3f9" stroke="#c9d6e4" stroke-width="1"/>
+<text x="711.0" y="209" font-size="13" font-weight="bold" fill="#1b2536" text-anchor="middle"></text>
+<rect x="756" y="186" width="90" height="34" fill="#eef3f9" stroke="#c9d6e4" stroke-width="1"/>
+<text x="801.0" y="209" font-size="13" font-weight="bold" fill="#1b2536" text-anchor="middle">A</text>
+<rect x="846" y="186" width="90" height="34" fill="#eef3f9" stroke="#c9d6e4" stroke-width="1"/>
+<text x="891.0" y="209" font-size="13" font-weight="bold" fill="#1b2536" text-anchor="middle">B</text>
+<rect x="666" y="220" width="90" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="711.0" y="243" font-size="13" fill="#1b2536" text-anchor="middle">1</text>
+<rect x="756" y="220" width="90" height="34" fill="#fff3c2" stroke="#c9d6e4" stroke-width="1"/>
+<text x="801.0" y="243" font-size="13" font-weight="bold" fill="#a92433" text-anchor="middle">ON</text>
+<rect x="846" y="220" width="90" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="891.0" y="243" font-size="13" fill="#1b2536" text-anchor="middle"></text>
+<rect x="666" y="254" width="90" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="711.0" y="277" font-size="13" fill="#1b2536" text-anchor="middle">2</text>
+<rect x="756" y="254" width="90" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="801.0" y="277" font-size="13" fill="#1b2536" text-anchor="middle"></text>
+<rect x="846" y="254" width="90" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="891.0" y="277" font-size="13" fill="#1b2536" text-anchor="middle"></text>
+<rect x="666" y="288" width="90" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="711.0" y="311" font-size="13" fill="#1b2536" text-anchor="middle">3</text>
+<rect x="756" y="288" width="90" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="801.0" y="311" font-size="13" fill="#1b2536" text-anchor="middle"></text>
+<rect x="846" y="288" width="90" height="34" fill="#ffffff" stroke="#c9d6e4" stroke-width="1"/>
+<text x="891.0" y="311" font-size="13" fill="#1b2536" text-anchor="middle"></text>
+<rect x="650" y="415" width="520" height="45" fill="#eef1f5"/>
+<text x="666" y="444" font-size="16" fill="#56677e">＋</text>
+<rect x="686" y="415" width="70" height="30" rx="6" fill="#d5dde6"/>
+<text x="721" y="435" font-size="13" fill="#56677e" text-anchor="middle">시트1</text>
+<rect x="764" y="415" width="70" height="30" rx="6" fill="#2e7d32"/>
+<text x="799" y="435" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">설정</text>
+<text x="920" y="230" font-size="15" font-weight="bold" fill="#a92433">← A1 칸! 여기에 ON 또는 OFF</text>
+<text x="920" y="252" font-size="13" fill="#56677e">(둘 다 말고 한 번에 하나만,</text>
+<text x="920" y="270" font-size="13" fill="#56677e">  대문자로 — on·On은 무반응)</text>
+<rect x="60" y="520" width="1130" height="200" rx="12" fill="#e2f6fb"/>
+<text x="85" y="554" font-size="15" fill="#1b2536">① 왼쪽 아래 ＋ 버튼 → 새 탭 생성 → 탭 이름 더블클릭 → '설정'으로 변경 (코드의 getSheetByName("설정")과 철자 일치!)</text>
+<text x="85" y="586" font-size="15" fill="#1b2536">② LED 켜기 : 설정 탭 A1에 ON 입력 → ESP32가 10초마다 확인(폴링) → 최대 10초 뒤 LED 켜짐</text>
+<text x="85" y="618" font-size="15" fill="#1b2536">③ LED 끄기 : A1의 ON을 지우고 OFF로 바꿔 쓰기 → 다음 폴링 때 꺼짐</text>
+<text x="85" y="650" font-size="15" fill="#1b2536">④ 확인 방법 : 브라우저에서 웹앱URL?mode=cmd 열기 → 화면에 A1의 값(ON)이 보이면 서버 쪽 성공!</text>
+<text x="85" y="682" font-size="15" fill="#1b2536">⑤ 시트1 탭은 손대지 않기 — ESP32가 보내는 측정값이 자동으로 쌓이는 곳이에요</text>
+</svg>

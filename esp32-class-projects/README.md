@@ -70,6 +70,7 @@
 
 ## 시작하기
 
+0. **완전 처음이라면** → 🐣 [`00_beginner_guide/`](00_beginner_guide/README.md) — 모든 실습을 클릭 단위로
 1. 보드 세팅이 처음이라면 → [`01_docs/setup_wemos_d1_r32.md`](01_docs/setup_wemos_d1_r32.md)
 0. 셀별 연결 그림 + 바로 쓰는 샘플 코드 → [`08_cell_samples/`](08_cell_samples/README.md)
 2. 수업 진행은 → [`02_sessions/01_esp32_first_meet`](02_sessions/01_esp32_first_meet/README.md) 부터 차례대로
@@ -81,6 +82,7 @@
 
 ```
 esp32-class-projects/
+├── 00_beginner_guide/     ← 🐣 왕초보 가이드 (회차별 실습 상세 안내)
 ├── 01_docs/               ← 보드 세팅·핀맵·AI Studio 웹앱 가이드 (공통)
 ├── 02_sessions/           ← 회차별 수업 자료 (1~7회차, 활동 형식)
 ├── 03_plant/ 04_attendance/ 05_store/ 06_umbrella/ 07_kiosk/   ← 팀 프로젝트 5종 (권장 진행 순서, 단계별 실습)
