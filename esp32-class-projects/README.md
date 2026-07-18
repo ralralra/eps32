@@ -71,6 +71,7 @@
 ## 시작하기
 
 1. 보드 세팅이 처음이라면 → [`01_docs/setup_wemos_d1_r32.md`](01_docs/setup_wemos_d1_r32.md)
+0. 셀별 연결 그림 + 바로 쓰는 샘플 코드 → [`08_cell_samples/`](08_cell_samples/README.md)
 2. 수업 진행은 → [`02_sessions/01_esp32_first_meet`](02_sessions/01_esp32_first_meet/README.md) 부터 차례대로
 3. 팀 프로젝트 단계(5회차~)에서 → 위 표에서 팀 프로젝트 폴더 선택
 4. 웹앱 화면은 AI Studio(New App)로 생성 → [`01_docs/ai_studio_webapp_guide.md`](01_docs/ai_studio_webapp_guide.md)
@@ -83,6 +84,7 @@ esp32-class-projects/
 ├── 01_docs/               ← 보드 세팅·핀맵·AI Studio 웹앱 가이드 (공통)
 ├── 02_sessions/           ← 회차별 수업 자료 (1~7회차, 활동 형식)
 ├── 03_plant/ 04_attendance/ 05_store/ 06_umbrella/ 07_kiosk/   ← 팀 프로젝트 5종 (권장 진행 순서, 단계별 실습)
+├── 08_cell_samples/       ← 셀별 연결 그림 + 샘플 코드 (빛·소리·토양습도·진동·홀·DHT·초음파·7세그·LCD)
 ├── images/                ← 보드 사진·핀맵 이미지
 ├── PROJECT_SPEC.md        ← 원본 기획 명세
 └── ○회차_*.pptx           ← 수업 설계 원본 PPT (참고용)

@@ -1,5 +1,5 @@
 # 1단계 — Arduino IDE 설정
-![ ](	/../main/esp32-cam-practice/images/ESP32-CAM-MB-Micro-USB-Programmer-CH340G-Serial-Chip-for-OV2640.webp)
+![ ](../images/ESP32-CAM-MB-Micro-USB-Programmer-CH340G-Serial-Chip-for-OV2640.webp)
 
 ESP32-CAM은 USB가 없어서 **USB-UART 변환기**가 필수입니다. 가장 흔한 두 방법:
 
