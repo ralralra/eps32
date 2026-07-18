@@ -117,7 +117,8 @@
 
 **👣 순서**
 1. aistudio.google.com → **Build → New App**
-2. [프롬프트 샘플](../02_sessions/04_cloud_expansion/code/05_ai_studio_prompt.md) 복사 → **`[우리 팀 웹앱 URL]` 두 곳을 실제 URL로 교체** → 붙여넣고 생성
+2. [프롬프트 샘플](../02_sessions/04_cloud_expansion/code/05_ai_studio_prompt.md) 복사 → **`[우리 팀 웹앱 URL]`을 전부 실제 URL로 교체한 뒤** 붙여넣고 생성
+   (⚠ 교체 없이 생성하면 AI가 자기 주소(…run.app)로 데이터를 받는 규칙을 지어내요 — 그 주소는 쓰지 않습니다!)
 3. 앱이 만들어지면 반드시 확인: 카드에 시트의 최신 값이 나오는지 (안 나오면 채팅으로 "10초마다 [URL]?mode=latest 에서 값을 가져와 표시해줘"라고 URL 포함해 재지시)
 4. 공유(Share) → 링크 생성 → 팀 채널로 전송
 5. 각자 폰에서 링크 열기 → **홈 화면에 추가** (안드로이드: 메뉴⋮ / 아이폰: 공유⬆) → 앱 아이콘 완성!
