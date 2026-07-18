@@ -10,7 +10,7 @@
 ### A. 공식 예제 사용 (추천, 처음엔 이걸로 — RNT 튜토리얼과 동일)
 Arduino IDE → `File` → `Examples` → `ESP32` → `Camera` → **CameraWebServer**
 
-![ ]( /../main/esp32-cam-practice/images/webserver.png)
+![ ](../images/webserver.png)
 
 해야 할 일:
 
@@ -26,9 +26,9 @@ Arduino IDE → `File` → `Examples` → `ESP32` → `Camera` → **CameraWebSe
 9. 좌측 패널에서 해상도/노출/화이트밸런스/특수효과 등을 토글하며 동작 차이 관찰
 
 
-![ ]( /../main/esp32-cam-practice/images/arduino-ide-camerawebserver-example.jpg)
+![ ](../images/arduino-ide-camerawebserver-example.jpg)
 
-![ ]( /../main/esp32-cam-practice/images/tinkerAI.png)
+![ ](../images/tinkerAI.png)
 
 
 이 예제는 해상도/노출/화이트밸런스 등을 웹UI에서 조정할 수 있어서 카메라 튜닝 연습용으로 훌륭함.
