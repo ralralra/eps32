@@ -37,6 +37,7 @@ Wemos D1 R32는 USB 통신에 **CH340** 칩을 씁니다.
    `USB-SERIAL CH340 (COM3)` 같은 항목이 보이면 성공 ✅
    - 노란 느낌표(⚠)가 붙어 있으면 드라이버 재설치
 5. **Mac**: 최신 macOS는 대부분 기본 인식. 안 되면 CH34x 드라이버 설치 후 재부팅
+   
 [`ch340`](esp32-class-projects/CH34x_Install_Windows_v3_4.zip) [`ch341`](esp32-class-projects/CH341SER.zip)
 > 💡 USB 케이블은 반드시 **데이터 전송용**이어야 해요. 충전 전용 케이블은 전원 LED는 켜지지만 포트가 안 잡힙니다.
 
