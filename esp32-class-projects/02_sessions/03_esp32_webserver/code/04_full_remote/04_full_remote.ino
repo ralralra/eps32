@@ -14,7 +14,7 @@
 #define LED    2
 #define DHTPIN 19  // ★핀맵 카드 확인
 
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+LiquidCrystal_I2C lcd(0x20, 16, 2);
 DHT dht(DHTPIN, DHT11);
 WebServer server(80);
 

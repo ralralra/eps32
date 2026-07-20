@@ -35,7 +35,7 @@ const char* WIFI_PASS = "비밀번호";   // ★
 const char* URL = "https://script.google.com/macros/s/XXXX/exec";  // ★ /exec 확인!
 
 DHT dht(DHTPIN, DHT11);
-LiquidCrystal_I2C lcd(0x27, 16, 2);   // 안 나오면 0x3F
+LiquidCrystal_I2C lcd(0x20, 16, 2);   // 고릴라셀 LCD 주소 = 0x20 (다른 제품이면 0x27·0x3F)
 
 void setup() {
   Serial.begin(115200);

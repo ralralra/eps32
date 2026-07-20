@@ -12,7 +12,7 @@
 
 #define LIGHT 34  // 빛센서 포트 (A2~A5 위치 — 핀맵 카드 확인)
 
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+LiquidCrystal_I2C lcd(0x20, 16, 2);
 
 void setup() {
   lcd.init();

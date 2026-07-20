@@ -86,6 +86,6 @@
 <rect x="60" y="620" width="1130" height="120" rx="12" fill="#e2f6fb"/>
 <text x="85" y="654" font-size="15" fill="#1b2536">① 실드 왼쪽 아래 I2C 블록에서 빈 포트 하나 선택 (4개 중 아무거나)</text>
 <text x="85" y="684" font-size="15" fill="#1b2536">② 4핀 케이블 색 맞추기 : G→GND(검정) · V→VCC(빨강) · 셋째 칸→SDA · 넷째 칸→SCL</text>
-<text x="85" y="714" font-size="15" fill="#1b2536">③ 코드 : LiquidCrystal_I2C lcd(0x27, 16, 2);  — 안 나오면 주소 0x3F, 뒷면 파란 다이얼(대비) 조절</text>
+<text x="85" y="714" font-size="15" fill="#1b2536">③ 코드 : LiquidCrystal_I2C lcd(0x20, 16, 2);  — 고릴라셀 LCD 주소는 0x20! 안 나오면 뒷면 파란 다이얼(대비) 조절</text>
 <text x="85" y="744" font-size="14" font-weight="bold" fill="#a92433">⚠ 4번째(맨 오른쪽) I2C 포트는 SDA·SCL 인쇄 순서가 반대! 꽂기 전에 실드의 칸 라벨을 꼭 확인하세요</text>
 </svg>

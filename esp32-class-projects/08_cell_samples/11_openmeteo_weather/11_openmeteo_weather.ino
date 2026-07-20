@@ -31,7 +31,7 @@ const char* LAT = "37.57";              // 위도 (예: 서울)
 const char* LON = "126.98";             // 경도
 
 DHT dht(DHTPIN, DHT11);
-LiquidCrystal_I2C lcd(0x27, 16, 2);     // 안 나오면 0x3F
+LiquidCrystal_I2C lcd(0x20, 16, 2);     // 고릴라셀 LCD 주소 = 0x20 (다른 제품이면 0x27·0x3F)
 
 // 응답 문자열에서 "이름": 뒤의 숫자만 잘라내는 간단 파서
 float pickNumber(String body, String key) {
