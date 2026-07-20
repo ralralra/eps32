@@ -1,20 +1,24 @@
 /*
   3회차 · 종합 미션 ② — 내 손안의 리모컨 (완성 예시)
-  폰 한 화면에서: LED 켜기/끄기 + 글자를 교실 LCD로 전송 + 온습도 실시간 표시
-  팀원 폰 2대 이상 동시 접속 → 서로 LCD에 인사를 보내 봐요!
+  폰 한 화면에서: LED 켜기/끄기 + 숫자를 교실 7세그로 전송 + 온습도 실시간 표시
+  팀원 폰 2대 이상 동시 접속 → 서로 7세그에 번호를 보내 봐요!
+  (7회차 키오스크의 '주문번호 표시'가 바로 이 원리예요)
 
-  배선: LCD 셀 → I2C 포트 / DHT 셀 → 디지털 포트 (★핀맵 카드 확인)
+  배선: 7세그 → '6'·'7' 칸 (DIO=27·CLK=14)
+       온습도(DHT) 셀 → PWM 구역 스티커 23 포트 (옆라벨 '11'은 우노 라벨!)
 */
 
 #include <WiFi.h>
 #include <WebServer.h>
-#include <LiquidCrystal_I2C.h>
+#include <TM1637Display.h>
 #include <DHT.h>
 
-#define LED    2
-#define DHTPIN 19  // ★핀맵 카드 확인
+#define LED    2   // 내장 LED
+#define DHTPIN 23  // 온습도 (스티커 23 포트)
+#define DIO    27  // '6' 칸
+#define CLK    14  // '7' 칸
 
-LiquidCrystal_I2C lcd(0x20, 16, 2);
+TM1637Display display(CLK, DIO);
 DHT dht(DHTPIN, DHT11);
 WebServer server(80);
 
@@ -31,7 +35,7 @@ const char PAGE[] = R"rawliteral(
       font-size: 22px; padding: 16px 32px; margin: 8px;
       border-radius: 12px; border: none; background: #2E6BE6; color: white;
     }
-    input { font-size: 20px; padding: 12px; border-radius: 8px; border: 1px solid #aaa; }
+    input { font-size: 20px; padding: 12px; border-radius: 8px; border: 1px solid #aaa; width: 160px; }
     p { font-size: 24px; }
   </style>
 </head>
@@ -44,14 +48,14 @@ const char PAGE[] = R"rawliteral(
   <button onclick="fetch('/led/off')">LED 끄기</button>
 
   <p>
-    <input id="msg" placeholder="LCD로 보낼 글자(영문)">
-    <button onclick="sendMsg()">보내기</button>
+    <input id="num" type="number" placeholder="7세그로 보낼 숫자">
+    <button onclick="sendNum()">보내기</button>
   </p>
 
   <script>
-    function sendMsg() {
-      const m = document.getElementById("msg").value;
-      fetch('/lcd?msg=' + encodeURIComponent(m));
+    function sendNum() {
+      const n = document.getElementById("num").value;
+      fetch('/seg?n=' + n);
     }
     async function update() {
       const res = await fetch("/sensor");
@@ -68,9 +72,8 @@ const char PAGE[] = R"rawliteral(
 void setup() {
   pinMode(LED, OUTPUT);
   dht.begin();
-  lcd.init();
-  lcd.backlight();
-  lcd.print("Remote Ready!");
+  display.setBrightness(7);
+  display.showNumberDec(0);
 
   WiFi.softAP("Team1_IoT", "12345678");
 
@@ -85,11 +88,9 @@ void setup() {
     digitalWrite(LED, LOW);
     server.send(200, "text/plain", "OK");
   });
-  server.on("/lcd", []() {
-    String msg = server.arg("msg");  // 주소 뒤 ?msg=... 에서 글자 꺼내기
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print(msg.substring(0, 16)); // LCD는 한 줄 16자 (한글 불가!)
+  server.on("/seg", []() {
+    int n = server.arg("n").toInt();   // 주소 뒤 ?n=... 에서 숫자 꺼내기
+    display.showNumberDec(n);          // 7세그는 0~9999까지 표시!
     server.send(200, "text/plain", "OK");
   });
   server.on("/sensor", []() {

@@ -1,17 +1,16 @@
 /*
   바깥 날씨 API(Open-Meteo) — 교실 안 vs 바깥 비교 (4회차 심화)
   ESP32가 인터넷의 무료 날씨 API에서 바깥 온도·습도를 받아와
-  교실 안(DHT) 값과 나란히 LCD에 표시해요.
+  교실 안(DHT) 값과 나란히 시리얼 모니터에 표시해요.
+  (7세그에는 바깥 온도가 표시됩니다)
 
-  LCD 표시 예:   In : 25.3C 48%
-                Out: 18.7C 62%
+  시리얼 표시 예:  In: 25.3C 48%  /  Out: 18.7C 62% (code 200)
 
   ● Open-Meteo : 회원가입도, API 키도 필요 없는 무료 날씨 API
   ● API란? 서비스가 열어 둔 '데이터 창구' — 주소로 요청하면 JSON으로 응답.
     우리 Apps Script 웹앱 URL도 똑같은 원리예요! (우리도 API를 만든 것)
 
-  배선: DHT 셀 → Digital '6'칸(GPIO27) / LCD 셀 → I2C 포트
-       (그림: images/wiring_digital_cell.png, images/lcd_wiring_gorilla_shield.png)
+  배선: 온습도(DHT) 셀 → PWM 구역 스티커 23 포트 / 7세그 → '6'·'7' 칸
   ★ 바꿀 곳: WiFi 이름·비번, 그리고 우리 학교의 위도·경도
     (지도 앱에서 학교를 길게 누르면 숫자 두 개가 나와요)
 */
@@ -19,10 +18,12 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
-#include <LiquidCrystal_I2C.h>
+#include <TM1637Display.h>
 #include <DHT.h>
 
-#define DHTPIN 27  // DHT 셀 ('6' 칸)
+#define DHTPIN 23  // 온습도 (스티커 23 포트)
+#define DIO    27  // '6' 칸
+#define CLK    14  // '7' 칸
 
 // ★ 우리 것으로 교체
 const char* WIFI_SSID = "WiFi이름";      // 2.4GHz만!
@@ -31,7 +32,7 @@ const char* LAT = "37.57";              // 위도 (예: 서울)
 const char* LON = "126.98";             // 경도
 
 DHT dht(DHTPIN, DHT11);
-LiquidCrystal_I2C lcd(0x20, 16, 2);     // 고릴라셀 LCD 주소 = 0x20 (다른 제품이면 0x27·0x3F)
+TM1637Display display(CLK, DIO);
 
 // 응답 문자열에서 "이름": 뒤의 숫자만 잘라내는 간단 파서
 float pickNumber(String body, String key) {
@@ -47,9 +48,7 @@ float pickNumber(String body, String key) {
 void setup() {
   Serial.begin(115200);
   dht.begin();
-  lcd.init();
-  lcd.backlight();
-  lcd.print("WiFi...");
+  display.setBrightness(7);
 
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   while (WiFi.status() != WL_CONNECTED) {
@@ -57,7 +56,6 @@ void setup() {
     Serial.print(".");
   }
   Serial.println(" WiFi OK!");
-  lcd.clear();
 }
 
 void loop() {
@@ -88,22 +86,10 @@ void loop() {
   // ── ③ 안팎 비교 표시 ─────────────────────────────
   Serial.printf("In: %.1fC %.0f%%  /  Out: %.1fC %.0f%% (code %d)\n",
                 inT, inH, outT, outH, code);
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("In : ");
-  lcd.print(inT, 1);
-  lcd.print("C ");
-  lcd.print((int)inH);
-  lcd.print("%");
-  lcd.setCursor(0, 1);
   if (outT > -100) {
-    lcd.print("Out: ");
-    lcd.print(outT, 1);
-    lcd.print("C ");
-    lcd.print((int)outH);
-    lcd.print("%");
+    display.showNumberDec((int)outT);   // 7세그엔 바깥 온도(정수)
   } else {
-    lcd.print("Out: API fail");       // 안 되면: WiFi·위도경도 확인
+    Serial.println("Out: API fail — WiFi·위도경도 확인!");
   }
 
   delay(600000);  // 10분마다 갱신 (날씨는 자주 안 변해요 — 예의 있는 요청!)
