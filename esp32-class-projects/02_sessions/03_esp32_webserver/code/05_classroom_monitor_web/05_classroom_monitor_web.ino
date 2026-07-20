@@ -30,7 +30,7 @@
 #define LED    13  // LED 셀 (JOY 구역 · 스티커 13)
 
 DHT dht(DHTPIN, DHT11);
-LiquidCrystal_I2C lcd(0x27, 16, 2);  // 안 나오면 0x3F
+LiquidCrystal_I2C lcd(0x20, 16, 2);  // 고릴라셀 LCD 주소 = 0x20 (다른 제품이면 0x27·0x3F)
 WebServer server(80);
 
 // 최근 측정값 (2초마다 갱신해서 여기 저장)

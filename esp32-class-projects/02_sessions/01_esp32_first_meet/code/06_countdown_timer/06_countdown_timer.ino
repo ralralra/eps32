@@ -10,7 +10,7 @@
 #define LIGHT 34   // 빛센서 (A2~A5 위치 — 핀맵 카드 확인)
 #define DARK  1000 // '가려짐' 기준값 — 시리얼로 관찰해서 우리 교실에 맞게 조절
 
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+LiquidCrystal_I2C lcd(0x20, 16, 2);
 
 void setup() {
   pinMode(LED, OUTPUT);

@@ -10,7 +10,7 @@
 #define TRIG 5  // ★핀맵 카드 확인
 #define ECHO 4  // ★핀맵 카드 확인
 
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+LiquidCrystal_I2C lcd(0x20, 16, 2);
 
 long readDistance() {
   digitalWrite(TRIG, LOW);

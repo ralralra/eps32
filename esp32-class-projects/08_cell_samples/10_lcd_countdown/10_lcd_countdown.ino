@@ -14,7 +14,7 @@
 #define LIGHT 34   // 빛센서 (A3 자리 예시 — 심화용, 없으면 관련 줄 삭제)
 #define DARK  1000 // '가려짐' 기준값 — 시리얼로 관찰해서 교실에 맞게 조절
 
-LiquidCrystal_I2C lcd(0x27, 16, 2);  // 안 나오면 0x3F
+LiquidCrystal_I2C lcd(0x20, 16, 2);  // 고릴라셀 LCD 주소 = 0x20 (다른 제품이면 0x27·0x3F)
 
 void setup() {
   pinMode(LED, OUTPUT);
