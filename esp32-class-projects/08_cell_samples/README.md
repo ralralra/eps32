@@ -17,6 +17,7 @@
 
 | # | 스케치 | 셀 | 핵심 함수 | 라이브러리 |
 |:---:|---|---|---|---|
+| 00 | [`00_i2c_scanner`](00_i2c_scanner/00_i2c_scanner.ino) | **I2C 스캐너** — LCD 주소 찾기 (안 나올 때 1순위!) | `Wire` | — |
 | 01 | [`01_light`](01_light/01_light.ino) | 빛 | `analogRead` | — |
 | 02 | [`02_sound`](02_sound/02_sound.ino) | 소리 | `analogRead` | — |
 | 03 | [`03_soil`](03_soil/03_soil.ino) | 토양습도 (+% 변환) | `analogRead` + `map` | — |
