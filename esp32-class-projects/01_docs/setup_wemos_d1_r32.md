@@ -31,7 +31,7 @@ Wemos D1 R32는 USB 통신에 **CH340** 칩을 씁니다.
 드라이버가 없으면 **포트(COM)가 아예 안 보여요** — 세팅 실패 원인 1위!
 
 1. 보드를 꽂고 드라이버를 설치하면 포트잡기 쉬워요 
-2. 드라이버 파일: `CH341SER` 둘다 다운로드 및 설치 [`ch340`](esp32-class-projects/CH34x_Install_Windows_v3_4.zip) [`ch341`](esp32-class-projects/CH341SER.zip)
+2. 드라이버 파일: `CH341SER` 둘다 다운로드 및 설치 [`ch340 (Windows)`](../CH34x_Install_Windows_v3_4.zip) · [`ch341`](../CH341SER.zip)
 3. 설치 **(install)** - 실패시 uninstall 후 다시 install
 4. **확인 방법 (Windows)**: 보드를 USB로 연결 → `장치 관리자` → `포트(COM & LPT)` →
    `USB-SERIAL CH340 (COM3)` 같은 항목이 보이면 성공 ✅
