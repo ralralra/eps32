@@ -11,7 +11,7 @@
 
 ```
 [기초 다지기 — 전원 공통 실습]
-1회차  LED·LCD·첫 센서          →  카운트다운 타이머
+1회차  LED·7세그·첫 센서        →  카운트다운 타이머
 2회차  센서 입력 + HTML·CSS·JS  →  접근 경보기 · 내 리모컨 웹페이지
 3회차  ESP32 웹서버 (AP 모드)   →  내 손안의 리모컨
 4회차  클라우드 (시트·Apps Script·AI Studio) → 교실 환경 모니터 = 공통 뼈대 템플릿!
@@ -35,7 +35,7 @@
 
 | 회차 | 폴더 | 주제 | 산출물 |
 |:---:|---|---|---|
-| 1 | [`02_sessions/01_esp32_first_meet`](02_sessions/01_esp32_first_meet/README.md) | ESP32 첫 만남 — LED·LCD·첫 센서 | 카운트다운 타이머 |
+| 1 | [`02_sessions/01_esp32_first_meet`](02_sessions/01_esp32_first_meet/README.md) | ESP32 첫 만남 — LED·7세그·첫 센서 | 카운트다운 타이머 |
 | 2 | [`02_sessions/02_sensors_and_web`](02_sessions/02_sensors_and_web/README.md) | 센서 입력 + 웹 기본기 | 접근 경보기 · 리모컨 페이지 |
 | 3 | [`02_sessions/03_esp32_webserver`](02_sessions/03_esp32_webserver/README.md) | ESP32 웹서버 — 폰으로 보드 제어 | 내 손안의 리모컨 |
 | 4 | [`02_sessions/04_cloud_expansion`](02_sessions/04_cloud_expansion/README.md) | 클라우드 확장 — 시트·Apps Script·AI Studio | 교실 환경 모니터 (뼈대 템플릿) |
@@ -51,10 +51,10 @@
 | 폴더 | 프로젝트 | 난이도 | 핵심 셀(고릴라셀) | 우회 전략 |
 |---|---|:---:|---|---|
 | [`03_plant/`](03_plant/README.md) | 스마트 화분 | ★☆☆ | 토양습도·빛·DHT·물온도 | 펌프 → 급수 알림 |
-| [`04_attendance/`](04_attendance/README.md) | 스마트 출석·안전 | ★☆☆ | 홀(도어)·LCD | NFC → 웹 QR 체크인 |
-| [`05_store/`](05_store/README.md) | 스마트 매점 | ★★☆ | LCD·무게·진동 | RFID → 웹 버튼+무게 감지 |
-| [`06_umbrella/`](06_umbrella/README.md) | 스마트 우산 대여 | ★★☆ | 초음파·무게·LCD | RFID → 웹 QR+거치 감지 |
-| [`07_kiosk/`](07_kiosk/README.md) | 창업 키오스크 | ★★☆ | LCD(주문번호)·소리 | 실결제 → 가상 포인트 |
+| [`04_attendance/`](04_attendance/README.md) | 스마트 출석·안전 | ★☆☆ | 홀(도어)·7세그 | NFC → 웹 QR 체크인 |
+| [`05_store/`](05_store/README.md) | 스마트 매점 | ★★☆ | 7세그·무게·진동 | RFID → 웹 버튼+무게 감지 |
+| [`06_umbrella/`](06_umbrella/README.md) | 스마트 우산 대여 | ★★☆ | 초음파·무게·7세그 | RFID → 웹 QR+거치 감지 |
+| [`07_kiosk/`](07_kiosk/README.md) | 창업 키오스크 | ★★☆ | 7세그(주문번호)·소리 | 실결제 → 가상 포인트 |
 
 - 각 프로젝트 폴더는 **단계별(step) 실습** 구조 — 한 단계씩 확인하며 진행
 - **우회는 미완성이 아니라 설계 전략** — 발표에서 가점 요소예요! ([7회차 평가 기준](02_sessions/07_final_presentation/README.md))
@@ -63,7 +63,7 @@
 ## 공통 준비물
 
 - **Wemos D1 R32** 보드 — 우노 모양 + WiFi 내장 ESP32 (⚠ CH340 드라이버 필요)
-- **고릴라 실드 + 고릴라셀 DSL 세트** — 센서 16종 + LCD, 배선 없이 포트에 꽂기만
+- **고릴라 실드 + 고릴라셀 DSL 세트** — 센서 16종, 배선 없이 포트에 꽂기만
 - USB 케이블 (데이터 전송용 — 충전 전용 X)
 - Arduino IDE + esp32 보드 패키지 + 블록코딩 도구
 - 팀당 노트북 1대 이상 + 스마트폰
@@ -87,7 +87,7 @@ esp32-class-projects/
 ├── 01_docs/               ← 보드 세팅·핀맵·AI Studio 웹앱 가이드 (공통)
 ├── 02_sessions/           ← 회차별 수업 자료 (1~7회차, 활동 형식)
 ├── 03_plant/ 04_attendance/ 05_store/ 06_umbrella/ 07_kiosk/   ← 팀 프로젝트 5종 (권장 진행 순서, 단계별 실습)
-├── 08_cell_samples/       ← 셀별 연결 그림 + 샘플 코드 (빛·소리·토양습도·진동·홀·DHT·초음파·7세그·LCD)
+├── 08_cell_samples/       ← 셀별 연결 그림 + 샘플 코드 (빛·소리·토양습도·진동·홀·DHT·초음파·7세그 …)
 ├── images/                ← 보드 사진·핀맵 이미지
 ├── PROJECT_SPEC.md        ← 원본 기획 명세
 └── ○회차_*.pptx           ← 수업 설계 원본 PPT (참고용)

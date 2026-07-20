@@ -7,7 +7,7 @@
 > - 처음 세팅: [`01_docs/setup_wemos_d1_r32.md`](../01_docs/setup_wemos_d1_r32.md) · 핀맵: [`01_docs/pinmap_wemos_d1_r32.md`](../01_docs/pinmap_wemos_d1_r32.md)
 > - 코드의 GPIO34(센서)·GPIO26(릴레이)는 D1 R32의 **A3·D2 자리**라 그대로 호환돼요.
 > - **고릴라셀 DSL 세트** 사용 시: 토양습도 셀을 **A2~A5 위치 포트**에 꽂으면 배선 끝!
->   펌프·릴레이가 없다면 **'급수 알림'(LCD·웹 경고)으로 우회**해도 훌륭한 설계예요 — [5회차 우회 전략](../02_sessions/05_team_project_planning/README.md) 참고.
+>   펌프·릴레이가 없다면 **'급수 알림'(웹 경고·LED)으로 우회**해도 훌륭한 설계예요 — [5회차 우회 전략](../02_sessions/05_team_project_planning/README.md) 참고.
 > - 수업 흐름: [6회차 — 캘리브레이션·엔드 투 엔드](../02_sessions/06_core_implementation/README.md)
 
 ## 무엇을 만드나
