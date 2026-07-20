@@ -160,6 +160,7 @@ setInterval(update, 2000); // 2초마다 반복 실행
 - [ ] 심화: 조도 값도 추가하고, 온도 28℃ 이상이면 화면 배경을 빨갛게
 
 > 💡 힌트: `if (d.temp > 28) document.body.style.background = "#FBECEC";`
+> ✅ 심화 포함 정답: [`code/06_weather_station/06_weather_station.ino`](code/06_weather_station/06_weather_station.ino)
 
 ---
 
