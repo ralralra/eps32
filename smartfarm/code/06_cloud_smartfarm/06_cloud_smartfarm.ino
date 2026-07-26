@@ -32,7 +32,7 @@
 #define BA 27
 #define BB 14
 #define LEDPIN 13
-#define NUMLED 4
+#define NUMLED 12
 
 #define SOIL_MAX  4095  // 01_soil에서 찾은 최댓값으로!
 #define TEMP_HIGH 26
@@ -106,7 +106,7 @@ void loop() {
     float nh = dht.readHumidity();
     if (!isnan(nt)) t = nt;          // 측정 실패(nan)면 이전 값 유지
     if (!isnan(nh)) h = nh;
-    soilPct = map(analogRead(SOIL), 0, SOIL_MAX, 0, 100);
+    soilPct = constrain(map(analogRead(SOIL), 0, SOIL_MAX, 0, 100), 0, 100);
     Serial.printf("T %.1f  H %.0f  Soil %d%%  cmd:%s\n", t, h, soilPct, cmd.c_str());
 
     // 자동 모드: 더우면·습하면 팬 / 추우면·과습이면 따뜻한 빛 (05와 같은 규칙!)
