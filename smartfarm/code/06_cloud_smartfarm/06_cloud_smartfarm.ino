@@ -37,8 +37,8 @@
 #define NUMLED 12   // 네오픽셀 LED 알갱이 개수
 
 // 자동 제어 기준값
-#define SOIL_DRY_RAW 0     // ★ 01_soil로 잰 '공기 중(마름)' 아날로그 값
-#define SOIL_WET_RAW 4095  // ★ 01_soil로 잰 '물속(젖음)' 아날로그 값
+#define SOIL_DRY_RAW 4095  // ★ 01_soil로 잰 '공기 중(마름)' 아날로그 값 (이 키트 센서는 마를수록 커요!)
+#define SOIL_WET_RAW 950   // ★ 01_soil로 잰 '물속(젖음)' 아날로그 값
 #define TEMP_HIGH 26    // 이보다 더우면 팬
 #define TEMP_LOW  21    // 이보다 추우면 보온등
 #define HUMI_HIGH 80    // 이보다 습하면 환기(팬)
