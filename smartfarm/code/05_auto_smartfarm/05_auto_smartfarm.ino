@@ -12,10 +12,12 @@
   ── 배선 (D1 R32 변환 완료) ──
   토양수분 → A2 자리(GPIO35) / DHT11 → D2 자리(GPIO26)
   팬 → D4·D5·D6·D7 자리(17·16·27·14, 모터드라이버 경유) / 네오픽셀 → D9 자리(GPIO13)
+  LCD → SDA·SCL을 보드 핀(21·22)에 직접! (쉴드 A4·A5 줄은 안 돼요)
 */
 
 #include <DHT.h>
 #include <Adafruit_NeoPixel.h>
+#include <LiquidCrystal_I2C.h>
 
 #define SOIL   35
 #define DHTPIN 26
@@ -37,6 +39,7 @@
 
 DHT dht(DHTPIN, DHT11);
 Adafruit_NeoPixel led(NUMLED, LEDPIN, NEO_GRB + NEO_KHZ800);
+LiquidCrystal_I2C lcd(0x27, 16, 2);   // 키트 LCD 주소 = 0x27 (안 나오면 0x3F)
 
 void fan(bool on) {
   digitalWrite(AA, on ? HIGH : LOW); digitalWrite(AB, LOW);
@@ -56,6 +59,8 @@ void setup() {
   dht.begin();
   led.begin();
   led.setBrightness(150);
+  lcd.init();
+  lcd.backlight();
 }
 
 void loop() {
@@ -69,6 +74,18 @@ void loop() {
 
   fan(needFan);
   warmLight(needWarm);
+
+  // LCD 상황판 — 1줄: 온습도 / 2줄: 토양습도 + 상태
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("T:");   lcd.print(t, 1);
+  lcd.print(" H:");  lcd.print(h, 0); lcd.print("%");
+  lcd.setCursor(0, 1);
+  lcd.print("Soil:"); lcd.print(soilPct); lcd.print("% ");
+  if (soilPct < SOIL_DRY)  lcd.print("WATER!");   // 물 주세요!
+  else if (needFan)        lcd.print("FAN");
+  else if (needWarm)       lcd.print("WARM");
+  else                     lcd.print("OK");
 
   if (needFan)  Serial.print("팬ON ");
   if (needWarm) Serial.print("보온등ON ");

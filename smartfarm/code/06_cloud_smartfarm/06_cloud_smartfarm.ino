@@ -6,6 +6,7 @@
   ── 배선 (05_auto_smartfarm과 동일) ──
   토양수분 → A2 자리(GPIO35) / DHT11 → D2 자리(GPIO26)
   팬 → 17·16·27·14 (모터드라이버) / 네오픽셀 → D9 자리(GPIO13)
+  LCD → SDA·SCL을 보드 핀(21·22)에 직접! (쉴드 A4·A5 줄은 안 돼요)
 
   ── 명령 (시트 설정!A1 ← 앱이 씀) ──
   AUTO / FAN_ON / FAN_OFF / LED_ON / LED_OFF
@@ -17,6 +18,7 @@
 #include <HTTPClient.h>
 #include <DHT.h>
 #include <Adafruit_NeoPixel.h>
+#include <LiquidCrystal_I2C.h>
 
 #define SOIL   35
 #define DHTPIN 26
@@ -38,6 +40,7 @@ const char* URL = "https://script.google.com/macros/s/XXXX/exec";  // ★ /exec 
 
 DHT dht(DHTPIN, DHT11);
 Adafruit_NeoPixel led(NUMLED, LEDPIN, NEO_GRB + NEO_KHZ800);
+LiquidCrystal_I2C lcd(0x27, 16, 2);   // 키트 LCD 주소 = 0x27 (안 나오면 0x3F)
 
 void fan(bool on) {
   digitalWrite(AA, on ? HIGH : LOW); digitalWrite(AB, LOW);
@@ -68,6 +71,9 @@ void setup() {
   dht.begin();
   led.begin();
   led.setBrightness(150);
+  lcd.init();
+  lcd.backlight();
+  lcd.print("WiFi...");
 
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   while (WiFi.status() != WL_CONNECTED) {
@@ -75,6 +81,8 @@ void setup() {
     Serial.print(".");
   }
   Serial.println(" WiFi OK!");
+  lcd.clear();
+  lcd.print("Smart Farm OK!");
 }
 
 void loop() {
@@ -83,6 +91,14 @@ void loop() {
   float h = dht.readHumidity();
   int soilPct = map(analogRead(SOIL), 0, SOIL_MAX, 0, 100);
   Serial.printf("T %.1f  H %.0f  Soil %d%%\n", t, h, soilPct);
+
+  // LCD 상황판 — 1줄: 온습도 / 2줄: 토양습도
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("T:");   lcd.print(t, 1);
+  lcd.print(" H:");  lcd.print(h, 0); lcd.print("%");
+  lcd.setCursor(0, 1);
+  lcd.print("Soil:"); lcd.print(soilPct); lcd.print("%");
 
   // ── ② 시트 업로드 ────────────────────────────
   String up = String(URL)
@@ -106,7 +122,11 @@ void loop() {
     fan((t > TEMP_HIGH) || (h > HUMI_HIGH));
     warmLight(t < TEMP_LOW);
   }
-  if (soilPct < dryLimit) Serial.println("💧 물 주세요! (앱에도 경고가 떠요)");
+  if (soilPct < dryLimit) {
+    Serial.println("💧 물 주세요! (앱에도 경고가 떠요)");
+    lcd.setCursor(9, 1);
+    lcd.print("WATER!");
+  }
 
   delay(10000);  // 10초마다 반복
 }
