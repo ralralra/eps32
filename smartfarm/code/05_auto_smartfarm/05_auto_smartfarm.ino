@@ -26,7 +26,7 @@
 #define BA 27
 #define BB 14
 #define LEDPIN 13
-#define NUMLED 4
+#define NUMLED 12
 
 #define SOIL_MAX 4095   // 01_soil에서 찾은 우리 화분의 최댓값으로!
 
@@ -66,7 +66,7 @@ void setup() {
 void loop() {
   float t = dht.readTemperature();
   float h = dht.readHumidity();
-  int soilPct = map(analogRead(SOIL), 0, SOIL_MAX, 0, 100);
+  int soilPct = constrain(map(analogRead(SOIL), 0, SOIL_MAX, 0, 100), 0, 100);
   Serial.printf("T %.1f℃  H %.0f%%  Soil %d%%  → ", t, h, soilPct);
 
   bool needFan  = (t > TEMP_HIGH) || (h > HUMI_HIGH);

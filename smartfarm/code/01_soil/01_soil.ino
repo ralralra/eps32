@@ -15,7 +15,7 @@ void setup() {
 
 void loop() {
   int raw = analogRead(SOIL);                    // 0 ~ 4095 (우노는 0~1023이었어요!)
-  int pct = map(raw, 0, SOIL_MAX, 0, 100);       // 0 ~ 100% 로 변환
+  int pct = constrain(map(raw, 0, SOIL_MAX, 0, 100), 0, 100);  // 0 ~ 100% 로 변환
   Serial.printf("아날로그 %d  →  토양습도 %d%%\n", raw, pct);
   delay(500);
 }
