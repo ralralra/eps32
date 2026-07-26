@@ -30,8 +30,8 @@
 #define LEDPIN 13   // 네오픽셀 (D9 줄)
 #define NUMLED 12   // 네오픽셀 LED 알갱이 개수
 
-#define SOIL_DRY_RAW 0     // ★ 01_soil로 잰 '공기 중(마름)' 아날로그 값
-#define SOIL_WET_RAW 4095  // ★ 01_soil로 잰 '물속(젖음)' 아날로그 값
+#define SOIL_DRY_RAW 4095  // ★ 01_soil로 잰 '공기 중(마름)' 아날로그 값 (이 키트 센서는 마를수록 커요!)
+#define SOIL_WET_RAW 950   // ★ 01_soil로 잰 '물속(젖음)' 아날로그 값
 
 // ── 자동 제어 기준값 (강낭콩 발아 생육정보: 21.6~25.8℃ · 습도 50%) ──
 #define TEMP_HIGH 26    // 이보다 더우면 팬 켜기
