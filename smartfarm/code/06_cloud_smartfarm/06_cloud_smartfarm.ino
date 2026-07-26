@@ -55,7 +55,7 @@ void fan(bool on) {
 
 void warmLight(bool on) {
   for (int i = 0; i < NUMLED; i++)
-    led.setPixelColor(i, on ? led.Color(255, 150, 60) : 0);
+    led.setPixelColor(i, on ? led.Color(255, 0, 255) : 0);
   led.show();
 }
 
