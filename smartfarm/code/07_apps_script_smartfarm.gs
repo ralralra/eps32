@@ -56,6 +56,8 @@ function doGet(e) {
   }
 
   // ── 기본: 측정값 기록 (ESP32 업로드) ────────────
+  // 응답에 "명령,기준값"을 실어 줘요 — 보드가 통신 1번으로 기록+명령확인을 한 번에!
   log.appendRow([new Date(), p.soil, p.temp, p.humi]);
-  return ContentService.createTextOutput("SAVED");
+  const reply = String(cfg.getRange("A1").getValue()) + "," + String(cfg.getRange("B1").getValue());
+  return ContentService.createTextOutput(reply);   // 예: "AUTO,30"
 }
