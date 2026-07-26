@@ -9,7 +9,7 @@
 #include <Adafruit_NeoPixel.h>
 
 #define PIN    13   // D9 자리 (D1 R32에서 GPIO13)
-#define NUMLED 4    // 모듈의 LED 개수 (키트 모듈에 맞게)
+#define NUMLED 12    // 모듈의 LED 개수 (키트 모듈에 맞게)
 
 Adafruit_NeoPixel led(NUMLED, PIN, NEO_GRB + NEO_KHZ800);
 
