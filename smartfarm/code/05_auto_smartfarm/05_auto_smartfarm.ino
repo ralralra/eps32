@@ -30,7 +30,8 @@
 #define LEDPIN 13   // 네오픽셀 (D9 줄)
 #define NUMLED 12   // 네오픽셀 LED 알갱이 개수
 
-#define SOIL_MAX 4095   // 토양수분 최댓값 — 01_soil에서 찾은 우리 화분의 값으로!
+#define SOIL_DRY_RAW 0     // ★ 01_soil로 잰 '공기 중(마름)' 아날로그 값
+#define SOIL_WET_RAW 4095  // ★ 01_soil로 잰 '물속(젖음)' 아날로그 값
 
 // ── 자동 제어 기준값 (강낭콩 발아 생육정보: 21.6~25.8℃ · 습도 50%) ──
 #define TEMP_HIGH 26    // 이보다 더우면 팬 켜기
@@ -76,8 +77,8 @@ void loop() {
   // ── ① 세 가지 값 측정 ──────────────────────────
   float t = dht.readTemperature();   // 온도(℃)
   float h = dht.readHumidity();      // 습도(%)
-  // 아날로그 값(0~4095)을 %(0~100)로 변환하고, 범위 밖이면 잘라내기
-  int soilPct = constrain(map(analogRead(SOIL), 0, SOIL_MAX, 0, 100), 0, 100);
+  // 2점 보정: 마른 값→0%, 젖은 값→100% (방향이 반대인 센서도 map이 알아서 처리)
+  int soilPct = constrain(map(analogRead(SOIL), SOIL_DRY_RAW, SOIL_WET_RAW, 0, 100), 0, 100);
   Serial.printf("T %.1f℃  H %.0f%%  Soil %d%%  → ", t, h, soilPct);   // 시리얼에 출력
 
   // ── ② 자동 판단 — 조건을 변수에 담아두기 ────────
