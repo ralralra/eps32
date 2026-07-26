@@ -6,7 +6,7 @@
  *
  * 주소 사용법 (URL = 배포한 /exec 주소):
  *   URL?soil=45&temp=25.3&humi=60      → 기록 저장 (ESP32가 10초마다)
- *   URL?mode=cmd                       → 설정!A1 명령 읽기 (ESP32)
+ *   URL?mode=cmd                       → "명령,기준값" 읽기 — 예: AUTO,30 (ESP32)
  *   URL?mode=set&cmd=FAN_ON            → 설정!A1에 명령 쓰기 (앱 버튼)
  *   URL?mode=latest                    → 최신 측정값 JSON (앱 화면)
  *   URL?mode=limit&value=30            → 설정!B1 기준값 변경 (앱 슬라이더)
@@ -19,9 +19,10 @@ function doGet(e) {
   const cfg = ss.getSheetByName("설정");
   const p = e.parameter;
 
-  // ── 명령 읽기 (ESP32 폴링) ─────────────────────
+  // ── 명령 읽기 (ESP32 폴링) — "명령,기준값" 형태로 한 번에! ──
   if (p.mode == "cmd") {
-    return ContentService.createTextOutput(String(cfg.getRange("A1").getValue()));
+    const out = String(cfg.getRange("A1").getValue()) + "," + String(cfg.getRange("B1").getValue());
+    return ContentService.createTextOutput(out);   // 예: "AUTO,30"
   }
 
   // ── 명령 쓰기 (앱 버튼) ────────────────────────
