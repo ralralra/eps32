@@ -98,6 +98,20 @@ String cmd = "AUTO";
 int dryLimit = 30;
 unsigned long lastRead = 0, lastPoll = 0, lastUpload = 0;
 
+// 서버 응답("AUTO,30" 모양)에서 명령·기준값을 꺼내 적용하기
+// — 명령 폴링과 업로드가 같은 모양으로 응답하므로 둘 다 이 함수 하나로!
+void handleReply(String r) {
+  int comma = r.indexOf(',');
+  if (comma <= 0) return;            // 모양이 다르면(통신 실패 등) 이전 값 유지
+  cmd = r.substring(0, comma);
+  dryLimit = r.substring(comma + 1).toInt();
+
+  if (cmd == "FAN_ON")  fan(true);
+  if (cmd == "FAN_OFF") fan(false);
+  if (cmd == "LED_ON")  warmLight(true);
+  if (cmd == "LED_OFF") warmLight(false);
+}
+
 void loop() {
   // ── ① 2초마다: 측정 + LCD + 자동 제어 ─────────
   if (millis() - lastRead >= 2000) {
@@ -131,25 +145,20 @@ void loop() {
   // ── ② 3초마다: 앱 명령 확인 (빠른 반응!) ──────
   if (millis() - lastPoll >= 3000) {
     lastPoll = millis();
-    String r = httpGET(String(URL) + "?mode=cmd");   // 응답 모양: "AUTO,30" (명령,기준값)
-    int comma = r.indexOf(',');
-    if (comma > 0) {
-      cmd = r.substring(0, comma);
-      dryLimit = r.substring(comma + 1).toInt();
-    }
-    if (cmd == "FAN_ON")  fan(true);
-    if (cmd == "FAN_OFF") fan(false);
-    if (cmd == "LED_ON")  warmLight(true);
-    if (cmd == "LED_OFF") warmLight(false);
+    handleReply(httpGET(String(URL) + "?mode=cmd"));   // 응답: "AUTO,30" (명령,기준값)
   }
 
   // ── ③ 30초마다: 구글 시트에 기록 ──────────────
+  //    업로드 응답에도 "명령,기준값"이 실려 와요 — 통신 1번으로 두 가지 일!
   if (millis() - lastUpload >= 30000) {
     lastUpload = millis();
+    lastPoll = millis();               // 방금 명령도 받았으니 다음 폴링은 3초 뒤로
     String up = String(URL)
       + "?soil=" + String(soilPct)
       + "&temp=" + String(t)
       + "&humi=" + String(h);
-    Serial.println("upload: " + httpGET(up));
+    String r = httpGET(up);
+    Serial.println("upload: " + r);
+    handleReply(r);
   }
 }
