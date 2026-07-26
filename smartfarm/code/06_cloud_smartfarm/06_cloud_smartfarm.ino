@@ -1,7 +1,12 @@
 /*
   4단계 — 클라우드 스마트팜 (완성판)
-  10초마다: 측정 → 구글 시트 업로드 → 명령 확인 → 자동/수동 제어
-  앱(AI Studio)에서 값 확인 + 팬·LED 제어 + 자동모드 기준값 변경!
+  일은 세 가지 리듬으로 나눠서 해요 (delay 대신 millis 시계 사용):
+    2초마다  → 센서 측정 + LCD + 자동 제어
+    3초마다  → 앱 명령 확인 (버튼 반응이 빨라져요!)
+    30초마다 → 구글 시트에 기록 (기록은 천천히 쌓여도 충분)
+
+  ※ 앱 버튼 → 실제 동작까지 3~6초 정도 걸리는 게 정상이에요.
+    (앱→시트는 즉시, 보드가 시트를 3초마다 확인 + 통신 왕복 시간)
 
   ── 배선 (05_auto_smartfarm과 동일) ──
   토양수분 → A2 자리(GPIO35) / DHT11 → D2 자리(GPIO26)
@@ -33,6 +38,7 @@
 #define TEMP_HIGH 26
 #define TEMP_LOW  21
 #define HUMI_HIGH 80
+#define SOIL_WET  70    // 이보다 젖었으면 따뜻한 빛으로 말리기
 
 const char* WIFI_SSID = "WiFi이름";   // ★ 2.4GHz만!
 const char* WIFI_PASS = "비밀번호";   // ★
@@ -85,48 +91,65 @@ void setup() {
   lcd.print("Smart Farm OK!");
 }
 
+// 최근 상태를 담아두는 변수들
+float t = 0, h = 0;
+int soilPct = 0;
+String cmd = "AUTO";
+int dryLimit = 30;
+unsigned long lastRead = 0, lastPoll = 0, lastUpload = 0;
+
 void loop() {
-  // ── ① 측정 ───────────────────────────────────
-  float t = dht.readTemperature();
-  float h = dht.readHumidity();
-  int soilPct = map(analogRead(SOIL), 0, SOIL_MAX, 0, 100);
-  Serial.printf("T %.1f  H %.0f  Soil %d%%\n", t, h, soilPct);
+  // ── ① 2초마다: 측정 + LCD + 자동 제어 ─────────
+  if (millis() - lastRead >= 2000) {
+    lastRead = millis();
+    float nt = dht.readTemperature();
+    float nh = dht.readHumidity();
+    if (!isnan(nt)) t = nt;          // 측정 실패(nan)면 이전 값 유지
+    if (!isnan(nh)) h = nh;
+    soilPct = map(analogRead(SOIL), 0, SOIL_MAX, 0, 100);
+    Serial.printf("T %.1f  H %.0f  Soil %d%%  cmd:%s\n", t, h, soilPct, cmd.c_str());
 
-  // LCD 상황판 — 1줄: 온습도 / 2줄: 토양습도
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("T:");   lcd.print(t, 1);
-  lcd.print(" H:");  lcd.print(h, 0); lcd.print("%");
-  lcd.setCursor(0, 1);
-  lcd.print("Soil:"); lcd.print(soilPct); lcd.print("%");
+    // 자동 모드: 더우면·습하면 팬 / 추우면·과습이면 따뜻한 빛 (05와 같은 규칙!)
+    if (cmd == "AUTO") {
+      fan((t > TEMP_HIGH) || (h > HUMI_HIGH));
+      warmLight((t < TEMP_LOW) || (soilPct > SOIL_WET));
+    }
 
-  // ── ② 시트 업로드 ────────────────────────────
-  String up = String(URL)
-    + "?soil=" + String(soilPct)
-    + "&temp=" + String(t)
-    + "&humi=" + String(h);
-  Serial.println("upload: " + httpGET(up));
-
-  // ── ③ 명령 확인 (앱 → 시트 설정!A1 → 보드) ────
-  String cmd = httpGET(String(URL) + "?mode=cmd");
-  int dryLimit = httpGET(String(URL) + "?mode=getlimit").toInt();  // 급수 알림 기준(%)
-  Serial.println("cmd: " + cmd + " / limit: " + String(dryLimit));
-
-  if (cmd == "FAN_ON")  fan(true);
-  if (cmd == "FAN_OFF") fan(false);
-  if (cmd == "LED_ON")  warmLight(true);
-  if (cmd == "LED_OFF") warmLight(false);
-
-  // ── ④ 자동 모드 ──────────────────────────────
-  if (cmd == "AUTO") {
-    fan((t > TEMP_HIGH) || (h > HUMI_HIGH));
-    warmLight(t < TEMP_LOW);
-  }
-  if (soilPct < dryLimit) {
-    Serial.println("💧 물 주세요! (앱에도 경고가 떠요)");
-    lcd.setCursor(9, 1);
-    lcd.print("WATER!");
+    // LCD 상황판 — 1줄: 온습도 / 2줄: 토양습도 (+ 급수 알림)
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("T:");   lcd.print(t, 1);
+    lcd.print(" H:");  lcd.print(h, 0); lcd.print("%");
+    lcd.setCursor(0, 1);
+    lcd.print("Soil:"); lcd.print(soilPct); lcd.print("%");
+    if (soilPct < dryLimit) {
+      lcd.setCursor(9, 1);
+      lcd.print("WATER!");             // 💧 물 주세요! (앱에도 경고가 떠요)
+    }
   }
 
-  delay(10000);  // 10초마다 반복
+  // ── ② 3초마다: 앱 명령 확인 (빠른 반응!) ──────
+  if (millis() - lastPoll >= 3000) {
+    lastPoll = millis();
+    String r = httpGET(String(URL) + "?mode=cmd");   // 응답 모양: "AUTO,30" (명령,기준값)
+    int comma = r.indexOf(',');
+    if (comma > 0) {
+      cmd = r.substring(0, comma);
+      dryLimit = r.substring(comma + 1).toInt();
+    }
+    if (cmd == "FAN_ON")  fan(true);
+    if (cmd == "FAN_OFF") fan(false);
+    if (cmd == "LED_ON")  warmLight(true);
+    if (cmd == "LED_OFF") warmLight(false);
+  }
+
+  // ── ③ 30초마다: 구글 시트에 기록 ──────────────
+  if (millis() - lastUpload >= 30000) {
+    lastUpload = millis();
+    String up = String(URL)
+      + "?soil=" + String(soilPct)
+      + "&temp=" + String(t)
+      + "&humi=" + String(h);
+    Serial.println("upload: " + httpGET(up));
+  }
 }
