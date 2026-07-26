@@ -6,18 +6,23 @@
   주의: 센서의 전원부(위쪽 기판)에 물이 닿지 않게!
 */
 
-#define SOIL 35        // A2 자리 (D1 R32에서 GPIO35)
-#define SOIL_MAX 4095  // 물 흠뻑 준 화분에서 측정한 최댓값으로 바꾸세요! (아래 순서 참고)
+// 핀 번호와 기준값을 이름으로 정해둔다 (#define = 별명 붙이기)
+#define SOIL 35        // 토양수분 센서가 연결된 아날로그 핀 (확장쉴드 A2 줄 = GPIO35)
+#define SOIL_MAX 4095  // 센서가 낼 수 있는 최댓값 — 물 흠뻑 준 화분에서 잰 값으로 바꾸세요! (아래 순서 참고)
 
+// 보드에 전원이 들어오면 처음 한 번만 실행되는 구간
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(115200);   // 컴퓨터와 시리얼 통신 시작 (시리얼 모니터도 115200으로!)
 }
 
+// setup() 이후 전원이 꺼질 때까지 무한 반복되는 구간
 void loop() {
-  int raw = analogRead(SOIL);                    // 0 ~ 4095 (우노는 0~1023이었어요!)
-  int pct = constrain(map(raw, 0, SOIL_MAX, 0, 100), 0, 100);  // 0 ~ 100% 로 변환
-  Serial.printf("아날로그 %d  →  토양습도 %d%%\n", raw, pct);
-  delay(500);
+  int raw = analogRead(SOIL);                    // 센서의 아날로그 값 읽기: 0~4095 (우노는 0~1023이었어요!)
+  // map(): 0~SOIL_MAX 범위의 값을 0~100 범위로 바꿔주는 함수 (비율 계산)
+  // constrain(): 계산 결과가 0보다 작거나 100보다 크면 잘라서 0~100 안에 가둔다
+  int pct = constrain(map(raw, 0, SOIL_MAX, 0, 100), 0, 100);  // 아날로그 값 → 토양습도 %
+  Serial.printf("아날로그 %d  →  토양습도 %d%%\n", raw, pct);  // 두 값을 시리얼 모니터에 출력
+  delay(500);                                    // 0.5초 쉬고 다시 측정
 }
 
 /*
