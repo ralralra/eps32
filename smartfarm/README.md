@@ -94,6 +94,7 @@ AI Studio 앱 하나에 전부 들어갑니다 → [앱 프롬프트](01_docs/ai
 ```
 smartfarm/
 ├── README.md                        ← 지금 이 문서
+├── 스마트팜_워크북.docx / .pdf        ← ★ 4차시 통합 교육자료 (학생 배포용 워크북)
 ├── 강의자료_에듀이노 스마트 팜 키트.pdf  ← 키트 원본 강의자료 (조립·결선 그림은 여기!)
 ├── 01_docs/
 │   ├── apps_script_setup.md         ← 시트 + Apps Script 만들기 (클릭 단위)
