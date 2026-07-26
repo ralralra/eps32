@@ -37,7 +37,8 @@
 #define NUMLED 12   // 네오픽셀 LED 알갱이 개수
 
 // 자동 제어 기준값
-#define SOIL_MAX  4095  // 토양수분 최댓값 — 01_soil에서 찾은 값으로!
+#define SOIL_DRY_RAW 0     // ★ 01_soil로 잰 '공기 중(마름)' 아날로그 값
+#define SOIL_WET_RAW 4095  // ★ 01_soil로 잰 '물속(젖음)' 아날로그 값
 #define TEMP_HIGH 26    // 이보다 더우면 팬
 #define TEMP_LOW  21    // 이보다 추우면 보온등
 #define HUMI_HIGH 80    // 이보다 습하면 환기(팬)
@@ -133,8 +134,8 @@ void loop() {
     float nh = dht.readHumidity();       // 새 습도 읽기
     if (!isnan(nt)) t = nt;              // 측정 성공했을 때만 저장 (실패=nan이면 이전 값 유지)
     if (!isnan(nh)) h = nh;
-    // 아날로그 값(0~4095) → %(0~100) 변환 + 범위 밖 잘라내기
-    soilPct = constrain(map(analogRead(SOIL), 0, SOIL_MAX, 0, 100), 0, 100);
+    // 2점 보정: 마른 값→0%, 젖은 값→100% (방향이 반대인 센서도 map이 알아서 처리)
+    soilPct = constrain(map(analogRead(SOIL), SOIL_DRY_RAW, SOIL_WET_RAW, 0, 100), 0, 100);
     Serial.printf("T %.1f  H %.0f  Soil %d%%  cmd:%s\n", t, h, soilPct, cmd.c_str());
 
     // 자동 모드일 때만: 더우면·습하면 팬 / 추우면·과습이면 생장등 (05와 같은 규칙!)
