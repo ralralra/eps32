@@ -32,6 +32,7 @@ ESP32-CAM (OV2640, 4MB PSRAM) 보드를 단계별로 익히고 작은 프로젝�
 | [Random Nerd Tutorials — ESP32-CAM Video Streaming and Face Recognition](https://randomnerdtutorials.com/esp32-cam-video-streaming-face-recognition-arduino-ide/) | 5단계 + 7단계. 스크린샷이 풍부함. 얼굴 인식은 esp32 코어 **2.x** 필수 |
 | [Espressif arduino-esp32 — Camera 예제](https://github.com/espressif/arduino-esp32/tree/master/libraries/ESP32/examples/Camera) | 원본 예제 모음 |
 | [Random Nerd Tutorials — ESP32-CAM 시리즈 인덱스](https://randomnerdtutorials.com/projects-esp32-cam/) | 타임랩스/SD 저장/PIR 모션 등 응용 예제 다수 |
+| [DIY Engineers — ESP32-Cam Complete Guide](https://www.diyengineers.com/2023/04/13/esp32-cam-complete-guide/) | 보드 소개~스트리밍 전 과정. 한국어 정리본: [`docs/esp32cam_complete_guide.md`](docs/esp32cam_complete_guide.md) |
 
 > 외부 가이드는 보드 코어 버전에 따라 빌드가 달라질 수 있으니 `docs/troubleshooting.md` 도 함께 참고.
 
@@ -49,7 +50,7 @@ ESP32-CAM (OV2640, 4MB PSRAM) 보드를 단계별로 익히고 작은 프로젝�
 
 ## 폴더 안내
 
-- `docs/` — 핀맵, 자주 쓰는 카메라 설정값, 트러블슈팅
+- `docs/` — 핀맵, 자주 쓰는 카메라 설정값, 트러블슈팅, ESP32-CAM 완전 정복 가이드 정리본
 - `libraries_notes/` — 사용한 라이브러리와 버전 정리
 
 ## 진행 방식
