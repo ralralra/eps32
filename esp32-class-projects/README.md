@@ -60,6 +60,12 @@
 - **우회는 미완성이 아니라 설계 전략** — 발표에서 가점 요소예요! ([7회차 평가 기준](02_sessions/07_final_presentation/README.md))
 - 원본 기획: [`PROJECT_SPEC.md`](PROJECT_SPEC.md)
 
+## 심화 과정 (7회차 이후 보너스)
+
+| 폴더 | 주제 | 내용 |
+|---|---|---|
+| [`09_sheet_chatbot/`](09_sheet_chatbot/README.md) | 🤖 시트 기록을 답해주는 AI 챗봇 | 4회차 시트에 **OpenAI Function Calling**을 연결 — "교실 온도 어때?"에 실제 데이터로 답하는 챗봇 (파이썬 + gradio). 도전과제: 말로 ESP32 제어하기 |
+
 ## 공통 준비물
 
 - **Wemos D1 R32** 보드 — 우노 모양 + WiFi 내장 ESP32 (⚠ CH340 드라이버 필요)
