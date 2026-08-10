@@ -3,7 +3,7 @@
 학생증(NFC, 13.56MHz)을 **ESP32 + RC522 리더기**에 태그하면,
 배포된 웹앱(스마트 출석체크)에서 실시간으로 출석이 확인되는 시스템입니다.
 
-- 보드: **ESP32 WROOM-32** (DevKit)
+- 보드: **ESP32 WROOM-32** (DevKit) — **Wemos D1 R32**도 같은 코드로 동작 (배선표 별도 제공)
 - 리더기: **RC522 (MFRC522)** — 13.56MHz RFID/NFC ([부품 안내글](https://m.intopion.com/board/view?id=aca_ardutip&seq=1313))
 - 앱: AI Studio로 만든 웹앱 (Cloud Run 배포)
 - 중계: **Google Apps Script + 구글 시트** (학생명단·출석기록 저장)
@@ -44,7 +44,7 @@ ESP32에 태그된 학생증 UID가 그 학생의 카드로 **학생명단 시�
 | [`firmware/uid_test/`](firmware/uid_test/) | **0단계** — 배선 확인 + 학생증 UID 읽기 테스트 (여기서부터 시작!) |
 | [`firmware/rfid_attendance/`](firmware/rfid_attendance/) | **완성 펌웨어** — 와이파이 접속, 중계서버 폴링, 태그 전송 |
 | [`apps_script/`](apps_script/) | 중계 서버 코드(`relay.gs`) + 시트 만들기·배포 가이드 |
-| [`docs/wiring.md`](docs/wiring.md) | RC522 ↔ WROOM-32 배선표 (⚠️ 3.3V 필수) |
+| [`docs/wiring.md`](docs/wiring.md) | RC522 배선표 — WROOM-32 DevKit / Wemos D1 R32 (⚠️ 3.3V 필수) |
 | [`docs/app_integration.md`](docs/app_integration.md) | 앱의 "시뮬레이션 버튼"을 실제 장치 연동으로 바꾸는 방법 |
 
 ## 진행 순서
