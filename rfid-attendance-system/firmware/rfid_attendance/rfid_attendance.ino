@@ -58,6 +58,10 @@ void setup() {
   delay(100);
   // 안테나 감도를 최대로 (기본값은 중간 — 인식 거리가 짧으면 필수)
   rfid.PCD_SetAntennaGain(MFRC522::RxGain_max);
+  // 송신 출력 부스트 — 안테나가 작은 카드(학생증·유스카드 등)도 깨울 수 있게
+  // 반송파 구동 세기를 최대로 올린다 (uid_test에서 검증된 설정)
+  rfid.PCD_WriteRegister(MFRC522::GsNReg, 0xF8);    // 기본 0x88
+  rfid.PCD_WriteRegister(MFRC522::CWGsPReg, 0x3F);  // 기본 0x20
 
   Serial.println();
   Serial.print("와이파이 접속 중");
@@ -106,11 +110,18 @@ void loop() {
     }
   }
 
-  // ③ 세션 중에 카드가 태그되면 UID를 서버로 보낸다
-  if (mode != "IDLE" && cardTagged()) {
+  // ③ 카드가 태그되면: 세션 중이면 서버로 전송, 대기 중이면 확인용으로 UID만 출력
+  if (cardTagged()) {
     String uid = readUid();
     rfid.PICC_HaltA();
     rfid.PCD_StopCrypto1();
+
+    if (mode == "IDLE") {
+      // 세션이 없을 때도 카드가 잘 읽히는지 시리얼로 확인할 수 있게 출력만 한다
+      Serial.println("카드 인식 (세션 없음 → 전송 안 함): UID = " + uid);
+      delay(1000);               // 같은 카드 연속 인식 방지
+      return;
+    }
 
     Serial.println("태그됨! UID = " + uid + " → 서버 전송");
     digitalWrite(PIN_LED, HIGH);
