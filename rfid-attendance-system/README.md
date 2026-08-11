@@ -45,7 +45,8 @@ ESP32에 태그된 학생증 UID가 그 학생의 카드로 **학생명단 시�
 | [`firmware/rfid_attendance/`](firmware/rfid_attendance/) | **완성 펌웨어** — 와이파이 접속, 중계서버 폴링, 태그 전송 |
 | [`apps_script/`](apps_script/) | 중계 서버 코드(`relay.gs`) + 시트 만들기·배포 가이드 |
 | [`docs/wiring.md`](docs/wiring.md) | RC522 배선표 — WROOM-32 DevKit / Wemos D1 R32 (⚠️ 3.3V 필수) |
-| [`docs/app_integration.md`](docs/app_integration.md) | 앱의 "시뮬레이션 버튼"을 실제 장치 연동으로 바꾸는 방법 |
+| [`docs/app_integration.md`](docs/app_integration.md) | 기존 앱의 "시뮬레이션 버튼"을 실제 장치 연동으로 바꾸는 방법 |
+| [`docs/app_build_prompt.md`](docs/app_build_prompt.md) | **앱을 처음부터 만드는 AI Studio 프롬프트** (출석체크·학생 등록·출결 기록 전체) |
 
 ## 진행 순서
 
