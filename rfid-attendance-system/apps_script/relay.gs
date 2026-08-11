@@ -1,26 +1,32 @@
 /**
- * 스마트 출석체크 — 중계 서버 (Google Apps Script)
+ * 스마트 출석체크 — 중계 서버 (Google Apps Script) 완성판
  * ----------------------------------------------------
  * 앱(Cloud Run)과 ESP32가 서로 직접 통신할 수 없으므로,
  * 둘 다 접속 가능한 이 웹앱이 가운데에서 심부름을 한다.
+ * 학생명단·출석기록 데이터베이스도 이 스크립트가 붙은 구글 시트에 저장된다.
  *
- * 구글 시트 구성 (이 스크립트가 붙어있는 시트):
- *   [학생명단] A:UID  B:이름  C:학년  D:반  E:번호  F:등록일시
- *   [출석기록] A:날짜  B:시각  C:교시  D:UID  E:이름  F:상태(출석/지각)  G:리더기
+ * ── 구글 시트 구성 (없으면 처음 사용될 때 자동 생성) ──
+ *   [학생명단]  A:UID  B:이름  C:학년  D:반  E:번호  F:등록일시
+ *   [출석기록]  A:날짜  B:시각  C:교시  D:UID  E:이름  F:상태  G:리더기
+ *   [교시설정]  A:교시  B:시작시각  C:지각기준   ← 지각 판정 기준 (수정해서 쓰세요)
  *
- * 주고받는 말 (action 파라미터):
- *   ── 앱이 부르는 것 ──
- *   start  : 세션 시작.  mode=attend|register, device, [name, grade, klass, number,
- *            period, lateAfter(HH:MM), timeout(초, 기본 30)]         → JSON
- *   status : 세션 상태/결과 조회. device                              → JSON
- *   cancel : 세션 취소. device                                        → JSON
- *   ── ESP32가 부르는 것 ──
- *   poll   : 할 일 조회. device                → "IDLE" | "ATTEND" | "REGISTER"
- *   tag    : 카드 태그 보고. device, uid       → "OK,이름,상태,시각" 등 한 줄 텍스트
+ * ── 주고받는 말 (action 파라미터, 전부 GET) ──
+ *   ▸ 앱이 부르는 것
+ *   start    : 세션 시작. mode=attend|register, device, [name, grade, klass, number,
+ *              period, lateAfter(HH:MM), timeout(초, 기본 30)]        → JSON
+ *   status   : 세션 상태/결과 조회. device                            → JSON
+ *   cancel   : 세션 취소. device                                      → JSON
+ *   students : 등록된 학생 목록                                       → JSON
+ *   records  : 출석기록 조회. [date(yyyy-MM-dd, 기본 오늘), period]    → JSON
+ *   periods  : 교시설정 목록                                          → JSON
+ *   ▸ ESP32가 부르는 것 (한 줄 텍스트 응답)
+ *   poll     : 할 일 조회. device        → "IDLE" | "ATTEND" | "REGISTER"
+ *   tag      : 카드 태그 보고. device, uid → "OK,이름,상태,시각" 등
  */
 
 var SHEET_STUDENTS = '학생명단';
 var SHEET_LOG = '출석기록';
+var SHEET_PERIODS = '교시설정';
 
 function doGet(e)  { return route(e); }
 function doPost(e) { return route(e); }
@@ -28,12 +34,15 @@ function doPost(e) { return route(e); }
 function route(e) {
   var p = (e && e.parameter) || {};
   switch (p.action) {
-    case 'start':  return startSession(p);
-    case 'status': return sessionStatus(p);
-    case 'cancel': return cancelSession(p);
-    case 'poll':   return devicePoll(p);
-    case 'tag':    return deviceTag(p);
-    default:       return text('ERR,unknown_action');
+    case 'start':    return startSession(p);
+    case 'status':   return sessionStatus(p);
+    case 'cancel':   return cancelSession(p);
+    case 'students': return listStudents(p);
+    case 'records':  return listRecords(p);
+    case 'periods':  return listPeriods(p);
+    case 'poll':     return devicePoll(p);
+    case 'tag':      return deviceTag(p);
+    default:         return text('ERR,unknown_action');
   }
 }
 
@@ -48,6 +57,13 @@ function startSession(p) {
     return json({ ok: false, error: '등록 모드는 name(학생 이름)이 필요합니다' });
   }
   var timeout = Math.min(Math.max(parseInt(p.timeout || '30', 10), 10), 300);
+
+  // 지각 기준: 파라미터로 안 주면 교시설정 시트에서 찾는다
+  var lateAfter = p.lateAfter || '';
+  if (p.mode === 'attend' && !lateAfter && p.period) {
+    lateAfter = findLateAfter(p.period);
+  }
+
   var sess = {
     mode: p.mode,             // attend | register
     state: 'waiting',         // waiting → done
@@ -57,11 +73,11 @@ function startSession(p) {
     klass: p.klass || '',
     number: p.number || '',
     period: p.period || '',   // 교시 (예: "1")
-    lateAfter: p.lateAfter || '',  // 이 시각(HH:MM) 이후 태그는 지각
+    lateAfter: lateAfter,     // 이 시각(HH:MM) 이후 태그는 지각
     result: null
   };
   CacheService.getScriptCache().put(cacheKey(p.device), JSON.stringify(sess), timeout);
-  return json({ ok: true, timeout: timeout });
+  return json({ ok: true, timeout: timeout, lateAfter: lateAfter });
 }
 
 // 앱이 1초마다 물어보는 세션 상태
@@ -75,6 +91,64 @@ function sessionStatus(p) {
 function cancelSession(p) {
   CacheService.getScriptCache().remove(cacheKey(p.device));
   return json({ ok: true });
+}
+
+// 등록된 학생 목록 (앱의 학생 선택 화면용)
+function listStudents(p) {
+  var sheet = getSheet(SHEET_STUDENTS, ['UID', '이름', '학년', '반', '번호', '등록일시']);
+  var rows = sheet.getDataRange().getValues();
+  var students = [];
+  for (var i = 1; i < rows.length; i++) {
+    if (!rows[i][0]) continue;
+    students.push({
+      uid: String(rows[i][0]),
+      name: String(rows[i][1]),
+      grade: String(rows[i][2]),
+      klass: String(rows[i][3]),
+      number: String(rows[i][4]),
+      registeredAt: String(rows[i][5])
+    });
+  }
+  return json({ ok: true, students: students });
+}
+
+// 출석기록 조회 (앱의 출결 관리 화면용). date 기본값은 오늘
+function listRecords(p) {
+  var sheet = getSheet(SHEET_LOG, ['날짜', '시각', '교시', 'UID', '이름', '상태', '리더기']);
+  var date = p.date || now('yyyy-MM-dd');
+  var rows = sheet.getDataRange().getValues();
+  var records = [];
+  for (var i = 1; i < rows.length; i++) {
+    var rowDate = formatCellDate(rows[i][0]);
+    if (rowDate !== date) continue;
+    if (p.period && String(rows[i][2]) !== String(p.period)) continue;
+    records.push({
+      date: rowDate,
+      time: formatCellTime(rows[i][1]),
+      period: String(rows[i][2]),
+      uid: String(rows[i][3]),
+      name: String(rows[i][4]),
+      status: String(rows[i][5]),
+      device: String(rows[i][6])
+    });
+  }
+  return json({ ok: true, date: date, records: records });
+}
+
+// 교시설정 목록
+function listPeriods(p) {
+  var sheet = getPeriodsSheet();
+  var rows = sheet.getDataRange().getValues();
+  var periods = [];
+  for (var i = 1; i < rows.length; i++) {
+    if (rows[i][0] === '') continue;
+    periods.push({
+      period: String(rows[i][0]),
+      start: formatCellTime(rows[i][1]),
+      lateAfter: formatCellTime(rows[i][2])
+    });
+  }
+  return json({ ok: true, periods: periods });
 }
 
 // ────────────────────────── ESP32 쪽 ──────────────────────────
@@ -120,7 +194,7 @@ function doRegister(sess, uid) {
   return 'OK_REG,' + sess.name;
 }
 
-// 출석 모드: UID로 학생을 찾아 출석기록에 저장 (지각 판정 포함)
+// 출석 모드: UID로 학생을 찾아 출석기록에 저장 (지각 판정·중복 방지 포함)
 function doAttend(sess, uid) {
   var student = findStudent(uid);
   if (!student) {
@@ -133,13 +207,26 @@ function doAttend(sess, uid) {
     return 'MISMATCH,' + student.name;
   }
 
+  var sheet = getSheet(SHEET_LOG, ['날짜', '시각', '교시', 'UID', '이름', '상태', '리더기']);
+  var today = now('yyyy-MM-dd');
+
+  // 같은 날 같은 교시에 이미 출석한 학생이면 중복 기록하지 않는다
+  var rows = sheet.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (formatCellDate(rows[i][0]) === today &&
+        String(rows[i][2]) === String(sess.period) &&
+        String(rows[i][3]).toUpperCase() === uid) {
+      var prevTime = formatCellTime(rows[i][1]);
+      sess.result = { ok: false, reason: 'already', name: student.name, time: prevTime, status: String(rows[i][5]) };
+      return 'ALREADY,' + student.name + ',' + prevTime;
+    }
+  }
+
   var time = now('HH:mm:ss');
   var status = '출석';
   if (sess.lateAfter && time > sess.lateAfter + ':00') status = '지각';
 
-  var sheet = getSheet(SHEET_LOG, ['날짜', '시각', '교시', 'UID', '이름', '상태', '리더기']);
-  sheet.appendRow([now('yyyy-MM-dd'), time, sess.period, uid, student.name, status, sess.device]);
-
+  sheet.appendRow([today, time, sess.period, uid, student.name, status, sess.device]);
   sess.result = { ok: true, name: student.name, status: status, time: time };
   return 'OK,' + student.name + ',' + status + ',' + time;
 }
@@ -166,6 +253,16 @@ function findStudent(uid) {
   return null;
 }
 
+// 교시설정 시트에서 해당 교시의 지각기준(HH:MM) 찾기
+function findLateAfter(period) {
+  var sheet = getPeriodsSheet();
+  var rows = sheet.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(period)) return formatCellTime(rows[i][2]).slice(0, 5);
+  }
+  return '';
+}
+
 // 시트가 없으면 머리글과 함께 만들어서 돌려준다
 function getSheet(name, headers) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -178,8 +275,43 @@ function getSheet(name, headers) {
   return sheet;
 }
 
+// 교시설정 시트: 없으면 기본 시간표를 채워서 만든다 (학교에 맞게 시트에서 직접 수정)
+function getPeriodsSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_PERIODS);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_PERIODS);
+    sheet.appendRow(['교시', '시작시각', '지각기준']);
+    sheet.setFrozenRows(1);
+    var defaults = [
+      ['1', '09:00', '09:10'],
+      ['2', '10:00', '10:10'],
+      ['3', '11:00', '11:10'],
+      ['4', '12:00', '12:10'],
+      ['5', '14:00', '14:10'],
+      ['6', '15:00', '15:10'],
+      ['7', '16:00', '16:10']
+    ];
+    for (var i = 0; i < defaults.length; i++) sheet.appendRow(defaults[i]);
+    // 시각이 날짜로 자동 변환되지 않게 텍스트 서식 지정
+    sheet.getRange('B2:C100').setNumberFormat('@');
+  }
+  return sheet;
+}
+
 function now(format) {
   return Utilities.formatDate(new Date(), 'Asia/Seoul', format);
+}
+
+// 시트 셀 값이 Date 객체로 읽히는 경우까지 처리해서 문자열로 통일
+function formatCellDate(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd');
+  return String(v);
+}
+
+function formatCellTime(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Seoul', 'HH:mm:ss');
+  return String(v);
 }
 
 function text(s) {

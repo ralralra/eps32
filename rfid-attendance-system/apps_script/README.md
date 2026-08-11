@@ -1,14 +1,25 @@
 # 중계 서버 만들기 (Apps Script + 구글 시트)
 
-앱과 ESP32가 만나는 곳입니다. 학생명단과 출석기록도 이 시트에 저장됩니다.
+앱과 ESP32가 만나는 곳입니다. 학생명단·출석기록 **데이터베이스**도 이 시트에 저장됩니다.
 10분이면 됩니다.
+
+## 구글 시트 구성 (자동 생성됨)
+
+| 시트 | 열 구성 | 용도 |
+|---|---|---|
+| **학생명단** | UID · 이름 · 학년 · 반 · 번호 · 등록일시 | 학생증 등록 DB (등록 모드에서 자동 추가) |
+| **출석기록** | 날짜 · 시각 · 교시 · UID · 이름 · 상태 · 리더기 | 출석/지각 기록 (태그할 때마다 자동 추가) |
+| **교시설정** | 교시 · 시작시각 · 지각기준 | **지각 판정 기준** — 기본 1~7교시가 채워지며, 학교 시간표에 맞게 시트에서 직접 수정 |
+
+세 시트 모두 **처음 사용될 때 자동으로 생성**되므로 미리 만들 필요 없습니다.
+지각 판정: 태그 시각이 해당 교시의 `지각기준`(HH:MM)을 넘으면 상태가 `지각`으로 기록됩니다.
+같은 날 같은 교시에 같은 학생이 또 태그하면 중복 기록하지 않고 `already`로 응답합니다.
 
 ## 1. 시트 만들고 스크립트 붙이기
 
 1. [sheets.new](https://sheets.new) → 새 시트 생성, 이름은 예: **스마트출석체크**
 2. 메뉴 **확장 프로그램 → Apps Script**
 3. 기본 `Code.gs` 내용을 전부 지우고 [`relay.gs`](relay.gs) 내용을 붙여넣기 → 저장
-   - `학생명단`, `출석기록` 시트는 **처음 사용될 때 자동으로 생성**되므로 미리 만들 필요 없음
 
 ## 2. 웹앱으로 배포
 
@@ -52,6 +63,7 @@
 | | `UNKNOWN` | 미등록 카드 |
 | | `DUP,이름` | 이미 등록된 카드 (등록 모드) |
 | | `MISMATCH,이름` | 대상 학생이 아닌 카드 |
+| | `ALREADY,이름,시각` | 같은 교시에 이미 출석한 학생 |
 | | `IDLE` | 세션이 이미 끝났거나 만료됨 |
 
 ### 앱용 (JSON 응답)
@@ -62,6 +74,9 @@
 | `?action=start&mode=register&device=&name=&grade=&klass=&number=` | 등록 세션 시작 |
 | `?action=status&device=` | `{state: none/waiting/done, mode, result}` — 1초 간격 폴링 권장 |
 | `?action=cancel&device=` | 세션 취소 |
+| `?action=students` | 등록된 학생 목록 `{students:[{uid,name,grade,klass,number,registeredAt}]}` |
+| `?action=records&date=&period=` | 출석기록 조회 (date 기본 오늘) `{records:[{date,time,period,uid,name,status,device}]}` |
+| `?action=periods` | 교시설정 목록 `{periods:[{period,start,lateAfter}]}` |
 
 - 세션은 리더기 1대당 1개이며 `timeout`(기본 30초) 후 자동 만료됩니다.
-- `lateAfter`(예: `09:00`)를 넘겨 태그하면 상태가 **지각**으로 기록됩니다.
+- 지각 기준: `start`에 `lateAfter`(HH:MM)를 직접 넘기거나, 생략하면 `period`로 **교시설정 시트**에서 자동으로 찾습니다.

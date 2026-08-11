@@ -177,6 +177,9 @@ void handleTagResult(String res) {
   } else if (res.startsWith("MISMATCH")) {
     Serial.println("❌ 대상 학생의 카드가 아닙니다 → " + res);
     beep(600);
+  } else if (res.startsWith("ALREADY")) {
+    Serial.println("❌ 이미 이 교시에 출석 처리된 학생입니다 → " + res);
+    beep(600);
   } else {
     Serial.println("⚠️ 서버 응답: " + res);
     beep(600);
