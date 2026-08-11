@@ -55,6 +55,9 @@ void setup() {
 
   SPI.begin();          // SCK=18, MISO=19, MOSI=23
   rfid.PCD_Init();
+  delay(100);
+  // 안테나 감도를 최대로 (기본값은 중간 — 인식 거리가 짧으면 필수)
+  rfid.PCD_SetAntennaGain(MFRC522::RxGain_max);
 
   Serial.println();
   Serial.print("와이파이 접속 중");

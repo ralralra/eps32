@@ -25,6 +25,8 @@ void setup() {
   SPI.begin();          // SCK=18, MISO=19, MOSI=23 (ESP32 기본 SPI 핀)
   rfid.PCD_Init();
   delay(100);
+  // 안테나 감도를 최대로 (기본값은 중간 — 클론 모듈은 이걸 안 올리면 인식 거리가 매우 짧음)
+  rfid.PCD_SetAntennaGain(MFRC522::RxGain_max);
 
   // 리더기가 응답하는지 자가진단 (배선이 틀리면 0x00 또는 0xFF가 나옴)
   byte version = rfid.PCD_ReadRegister(MFRC522::VersionReg);
