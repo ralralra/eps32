@@ -46,6 +46,7 @@ ESP32에 태그된 학생증 UID가 그 학생의 카드로 **학생명단 시�
 | [`apps_script/`](apps_script/) | 중계 서버 코드(`relay.gs`) + 시트 만들기·배포 가이드 |
 | [`docs/wiring.md`](docs/wiring.md) | RC522 배선표 — WROOM-32 DevKit / Wemos D1 R32 (⚠️ 3.3V 필수) |
 | [`docs/app_integration.md`](docs/app_integration.md) | 기존 앱의 "시뮬레이션 버튼"을 실제 장치 연동으로 바꾸는 방법 |
+| [`docs/book/`](docs/book/) | **책 원고 (마크다운, 18장 + 부록)** — 슬라이드 내용을 서술형으로 풀어쓴 교재 원고 |
 | [`docs/slides/`](docs/slides/) | **교육지도서 슬라이드 (PPTX, 30장)** — 개념·배선·함수별 코드 해설·트러블슈팅, 발표자 노트 포함 |
 | [`docs/app_build_prompt.md`](docs/app_build_prompt.md) | **앱을 처음부터 만드는 AI Studio 프롬프트** (출석체크·학생 등록·출결 기록 전체) |
 
