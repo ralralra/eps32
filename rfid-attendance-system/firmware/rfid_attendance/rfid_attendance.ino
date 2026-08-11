@@ -110,11 +110,18 @@ void loop() {
     }
   }
 
-  // ③ 세션 중에 카드가 태그되면 UID를 서버로 보낸다
-  if (mode != "IDLE" && cardTagged()) {
+  // ③ 카드가 태그되면: 세션 중이면 서버로 전송, 대기 중이면 확인용으로 UID만 출력
+  if (cardTagged()) {
     String uid = readUid();
     rfid.PICC_HaltA();
     rfid.PCD_StopCrypto1();
+
+    if (mode == "IDLE") {
+      // 세션이 없을 때도 카드가 잘 읽히는지 시리얼로 확인할 수 있게 출력만 한다
+      Serial.println("카드 인식 (세션 없음 → 전송 안 함): UID = " + uid);
+      delay(1000);               // 같은 카드 연속 인식 방지
+      return;
+    }
 
     Serial.println("태그됨! UID = " + uid + " → 서버 전송");
     digitalWrite(PIN_LED, HIGH);
