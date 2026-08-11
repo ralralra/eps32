@@ -37,7 +37,10 @@ const char* DEVICE_ID  = "DEV001";   // 앱에 표시되는 리더기 이름 (1-
 #define PIN_LED     2    // 보드 내장 파란 LED
 #define PIN_BUZZER  4    // 수동부저 (없으면 안 달아도 됨 — 소리만 안 남)
 
-const unsigned long POLL_MS = 2000;   // 폴링 간격 (2초)
+const unsigned long POLL_MS = 2000;          // 대기 중 폴링 간격 (2초)
+const unsigned long POLL_SESSION_MS = 5000;  // 세션 중 폴링 간격 (5초)
+// ↑ 서버 요청(HTTPS)은 한 번에 2~3초씩 걸려서 그동안 카드 스캔이 멈춘다.
+//   세션 중에는 폴링을 뜸하게 해서 카드 스캔 시간을 최대한 확보한다.
 
 MFRC522 rfid(PIN_SS, PIN_RST);
 
@@ -87,18 +90,8 @@ void loop() {
     return;
   }
 
-  // ① 주기적으로 중계서버에 할 일이 있는지 물어본다
-  if (millis() - lastPoll >= POLL_MS) {
-    lastPoll = millis();
-    String res = httpGet(String(RELAY_URL) + "?action=poll&device=" + DEVICE_ID);
-    if (res == "ATTEND" || res == "REGISTER" || res == "IDLE") {
-      if (res != mode) {
-        Serial.println("모드 변경: " + mode + " → " + res);
-        if (res == "IDLE") digitalWrite(PIN_LED, LOW);
-      }
-      mode = res;
-    }
-  }
+  // ① 카드 확인이 최우선 — loop가 도는 동안 거의 빈틈없이 카드를 스캔한다
+  if (handleCard()) return;
 
   // ② 세션 중이면 LED 깜빡이기 (출석: 0.5초 / 등록: 0.15초)
   if (mode != "IDLE") {
@@ -110,30 +103,52 @@ void loop() {
     }
   }
 
-  // ③ 카드가 태그되면: 세션 중이면 서버로 전송, 대기 중이면 확인용으로 UID만 출력
-  if (cardTagged()) {
-    String uid = readUid();
-    rfid.PICC_HaltA();
-    rfid.PCD_StopCrypto1();
+  // ③ 주기적으로 중계서버에 할 일이 있는지 물어본다
+  //    (요청하는 동안 스캔이 멈추므로, 세션 중에는 간격을 길게)
+  unsigned long pollInterval = (mode == "IDLE") ? POLL_MS : POLL_SESSION_MS;
+  if (millis() - lastPoll >= pollInterval) {
+    // 폴링으로 2~3초 멈추기 직전, 카드가 이미 올라와 있는지 한 번 더 확인
+    if (handleCard()) return;
 
-    if (mode == "IDLE") {
-      // 세션이 없을 때도 카드가 잘 읽히는지 시리얼로 확인할 수 있게 출력만 한다
-      Serial.println("카드 인식 (세션 없음 → 전송 안 함): UID = " + uid);
-      delay(1000);               // 같은 카드 연속 인식 방지
-      return;
+    lastPoll = millis();
+    String res = httpGet(String(RELAY_URL) + "?action=poll&device=" + DEVICE_ID);
+    if (res == "ATTEND" || res == "REGISTER" || res == "IDLE") {
+      if (res != mode) {
+        Serial.println("모드 변경: " + mode + " → " + res);
+        if (res == "IDLE") digitalWrite(PIN_LED, LOW);
+      }
+      mode = res;
     }
-
-    Serial.println("태그됨! UID = " + uid + " → 서버 전송");
-    digitalWrite(PIN_LED, HIGH);
-
-    String res = httpGet(String(RELAY_URL) + "?action=tag&device=" + DEVICE_ID + "&uid=" + uid);
-    handleTagResult(res);
-
-    mode = "IDLE";               // 처리 끝 → 대기 상태로
-    digitalWrite(PIN_LED, LOW);
-    lastPoll = millis();         // 방금 통신했으니 다음 폴링은 2초 뒤
-    delay(1000);                 // 같은 카드 연속 인식 방지
   }
+}
+
+// 카드가 태그되면 처리한다. 처리했으면 true를 반환
+// 세션 중이면 서버로 전송, 대기 중이면 확인용으로 UID만 출력
+bool handleCard() {
+  if (!cardTagged()) return false;
+
+  String uid = readUid();
+  rfid.PICC_HaltA();
+  rfid.PCD_StopCrypto1();
+
+  if (mode == "IDLE") {
+    // 세션이 없을 때도 카드가 잘 읽히는지 시리얼로 확인할 수 있게 출력만 한다
+    Serial.println("카드 인식 (세션 없음 → 전송 안 함): UID = " + uid);
+    delay(1000);               // 같은 카드 연속 인식 방지
+    return true;
+  }
+
+  Serial.println("태그됨! UID = " + uid + " → 서버 전송");
+  digitalWrite(PIN_LED, HIGH);
+
+  String res = httpGet(String(RELAY_URL) + "?action=tag&device=" + DEVICE_ID + "&uid=" + uid);
+  handleTagResult(res);
+
+  mode = "IDLE";               // 처리 끝 → 대기 상태로
+  digitalWrite(PIN_LED, LOW);
+  lastPoll = millis();         // 방금 통신했으니 다음 폴링은 나중에
+  delay(1000);                 // 같은 카드 연속 인식 방지
+  return true;
 }
 
 // 카드가 리더기 위에 있는지 WUPA(깨우기) 방식으로 확인
