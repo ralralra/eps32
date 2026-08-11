@@ -58,6 +58,10 @@ void setup() {
   delay(100);
   // 안테나 감도를 최대로 (기본값은 중간 — 인식 거리가 짧으면 필수)
   rfid.PCD_SetAntennaGain(MFRC522::RxGain_max);
+  // 송신 출력 부스트 — 안테나가 작은 카드(학생증·유스카드 등)도 깨울 수 있게
+  // 반송파 구동 세기를 최대로 올린다 (uid_test에서 검증된 설정)
+  rfid.PCD_WriteRegister(MFRC522::GsNReg, 0xF8);    // 기본 0x88
+  rfid.PCD_WriteRegister(MFRC522::CWGsPReg, 0x3F);  // 기본 0x20
 
   Serial.println();
   Serial.print("와이파이 접속 중");
