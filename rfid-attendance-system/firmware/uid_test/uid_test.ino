@@ -18,6 +18,12 @@
 #define PIN_SS   5    // RC522 SDA(SS)
 #define PIN_RST  27   // RC522 RST
 
+// ── 송신 출력 부스트 실험 ──
+// 일부 카드(안테나가 작은 학생증·유스카드 등)는 RC522 기본 출력으로는 깨어나지 않는다.
+// 1 = 안테나 구동 출력을 최대로 올림 (안 되던 카드가 될 수 있음)
+// 0 = 기본 출력 (부스트 후 잘 되던 카드까지 안 되면 0으로 되돌릴 것)
+#define BOOST_FIELD 1
+
 MFRC522 rfid(PIN_SS, PIN_RST);
 
 void setup() {
@@ -27,6 +33,14 @@ void setup() {
   delay(100);
   // 안테나 감도를 최대로 (기본값은 중간 — 클론 모듈은 이걸 안 올리면 인식 거리가 매우 짧음)
   rfid.PCD_SetAntennaGain(MFRC522::RxGain_max);
+
+#if BOOST_FIELD
+  // 안테나 구동 전도도(=송신 세기)를 끌어올린다.
+  // GsNReg 상위 4비트 = 반송파 세기(최대 F), 하위 4비트 = 변조 세기(기본 8 유지)
+  rfid.PCD_WriteRegister(MFRC522::GsNReg, 0xF8);    // 기본 0x88 → 반송파 최대
+  rfid.PCD_WriteRegister(MFRC522::CWGsPReg, 0x3F);  // 기본 0x20 → p드라이버 반송파 최대
+  Serial.println("(송신 출력 부스트 ON)");
+#endif
 
   // 리더기가 응답하는지 자가진단 (배선이 틀리면 0x00 또는 0xFF가 나옴)
   byte version = rfid.PCD_ReadRegister(MFRC522::VersionReg);
