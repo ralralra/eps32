@@ -107,7 +107,7 @@ void loop() {
   }
 
   // ③ 세션 중에 카드가 태그되면 UID를 서버로 보낸다
-  if (mode != "IDLE" && rfid.PICC_IsNewCardPresent() && rfid.PICC_ReadCardSerial()) {
+  if (mode != "IDLE" && cardTagged()) {
     String uid = readUid();
     rfid.PICC_HaltA();
     rfid.PCD_StopCrypto1();
@@ -123,6 +123,17 @@ void loop() {
     lastPoll = millis();         // 방금 통신했으니 다음 폴링은 2초 뒤
     delay(1000);                 // 같은 카드 연속 인식 방지
   }
+}
+
+// 카드가 리더기 위에 있는지 WUPA(깨우기) 방식으로 확인
+// 학생증 같은 보안 스마트카드(ISO 14443-4)는 일반 감지(REQA)에 응답하지 않는
+// 경우가 있어서 WUPA 방식이 훨씬 안정적으로 잡는다.
+bool cardTagged() {
+  byte atqa[2];
+  byte atqaSize = sizeof(atqa);
+  MFRC522::StatusCode st = rfid.PICC_WakeupA(atqa, &atqaSize);
+  if (st != MFRC522::STATUS_OK && st != MFRC522::STATUS_COLLISION) return false;
+  return rfid.PICC_ReadCardSerial();
 }
 
 // UID를 "A1B2C3D4" 형태의 대문자 16진수 문자열로

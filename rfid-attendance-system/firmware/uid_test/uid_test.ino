@@ -41,8 +41,17 @@ void setup() {
 }
 
 void loop() {
-  // 새 카드가 올라왔고, UID를 읽을 수 있으면
-  if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial()) {
+  // REQA 대신 WUPA(깨우기)로 카드를 찾는다.
+  // 학생증 같은 보안 스마트카드(ISO 14443-4)는 일반 감지(REQA)에 응답하지 않거나
+  // HALT 상태에 머무는 경우가 있어서, WUPA 방식이 훨씬 안정적으로 잡는다.
+  byte atqa[2];
+  byte atqaSize = sizeof(atqa);
+  MFRC522::StatusCode st = rfid.PICC_WakeupA(atqa, &atqaSize);
+  if (st != MFRC522::STATUS_OK && st != MFRC522::STATUS_COLLISION) {
+    delay(50);
+    return;
+  }
+  if (!rfid.PICC_ReadCardSerial()) {
     delay(50);
     return;
   }
