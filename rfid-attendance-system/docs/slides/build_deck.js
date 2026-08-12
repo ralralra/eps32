@@ -475,7 +475,7 @@ function bullets(s, items, x, y, w, h, fontSize) {
       fontSize: 10.5, color: C.sub, margin: 0, lineSpacingMultiple: 1.15, italic: true });
   });
   card(s, 0.6, 6.35, 12.1, 0.55, C.greenLight, "D1FAE5");
-  s.addText("빈 시트에서 시작해도 OK — 세 시트 모두 첫 요청이 들어올 때 스크립트가 머리글과 함께 자동 생성합니다.",
+  s.addText("빈 시트에서 시작해도 OK — 첫 요청이 들어오는 순간 세 시트를 한 번에 머리글과 함께 자동 생성합니다.",
     { x: 0.85, y: 6.35, w: 11.6, h: 0.55, fontFace: KO, fontSize: 11.5, bold: true,
       color: C.greenDark, margin: 0, valign: "middle" });
   footerUrl(s, "시트 구성 문서", REPO + "/blob/main/rfid-attendance-system/apps_script/README.md");
