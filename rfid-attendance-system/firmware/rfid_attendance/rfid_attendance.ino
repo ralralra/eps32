@@ -81,8 +81,67 @@ void setup() {
   Serial.println();
   Serial.print("접속 완료! IP: ");
   Serial.println(WiFi.localIP());
+
+  diagnoseServer();     // 중계서버가 제대로 응답하는지 먼저 점검
+
   Serial.println("앱에서 [출석체크 시작]을 누르면 LED가 깜빡입니다.");
   beep(80); beep(80);   // 준비 완료 알림
+}
+
+// 부팅할 때 중계서버를 한 번 점검한다.
+// 리다이렉트를 '따라가지 않고' 어디로 보내는지 직접 본다 —
+// 구글 로그인 페이지로 보내고 있으면 배포 설정이 잘못된 것이므로 바로 알 수 있다.
+void diagnoseServer() {
+  Serial.println();
+  Serial.println("── 중계서버 점검 ──");
+
+  String url = String(RELAY_URL);
+  if (url.indexOf("/exec") < 0) {
+    Serial.println("⚠️ RELAY_URL이 /exec 으로 끝나지 않습니다!");
+    Serial.println("   /dev 주소는 구글 로그인이 필요해 ESP32가 쓸 수 없습니다.");
+  }
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  client.setTimeout(HTTP_TIMEOUT_MS / 1000);
+
+  HTTPClient https;
+  https.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);   // 따라가지 않고 확인만
+  https.setTimeout(HTTP_TIMEOUT_MS);
+  const char* headerKeys[] = { "Location" };
+  https.collectHeaders(headerKeys, 1);
+
+  if (!https.begin(client, url + "?action=periods")) {
+    Serial.println("❌ 서버 연결 준비 실패 — RELAY_URL을 확인하세요.");
+    Serial.println("──────────────────");
+    return;
+  }
+
+  int code = https.GET();
+  String location = https.header("Location");
+  Serial.println("응답 코드: " + String(code));
+
+  if (code == HTTP_CODE_OK) {
+    String body = https.getString();
+    body.trim();
+    Serial.println("✅ 서버 정상 응답: " + body.substring(0, 60));
+  } else if (code == 302 || code == 301 || code == 307) {
+    if (location.indexOf("accounts.google.com") >= 0 ||
+        location.indexOf("ServiceLogin") >= 0) {
+      Serial.println("❌ 구글 로그인 페이지로 보내고 있습니다!");
+      Serial.println("   → 배포 관리에서 액세스 권한을 '모든 사용자'로 바꾸고");
+      Serial.println("     '새 버전'으로 다시 배포하세요.");
+    } else {
+      Serial.println("↪️ 정상적인 리다이렉트입니다 (Apps Script의 일반 동작)");
+    }
+  } else if (code == -11) {
+    Serial.println("⚠️ 응답이 늦습니다 — 회선이 느리거나 서버가 깨어나는 중");
+  } else {
+    Serial.println("⚠️ 예상 밖의 응답" + explainHttpError(code));
+  }
+
+  https.end();
+  Serial.println("──────────────────");
 }
 
 void loop() {
