@@ -9,37 +9,54 @@
  *   [학생명단]  A:UID  B:이름  C:학년  D:반  E:번호  F:등록일시
  *   [출석기록]  A:날짜  B:시각  C:교시  D:UID  E:이름  F:상태  G:리더기
  *   [교시설정]  A:교시  B:시작시각  C:지각기준   ← 지각 판정 기준 (수정해서 쓰세요)
+ *   [설정]      A:항목  B:값                    ← 교사 비밀번호 (수정해서 쓰세요)
  *
  * ── 주고받는 말 (action 파라미터, 전부 GET) ──
  *   ▸ 앱이 부르는 것
+ *   login    : 교사 비밀번호 확인. pin                                → JSON
  *   start    : 세션 시작. mode=attend|register, device, [name, grade, klass, number,
- *              period, lateAfter(HH:MM), timeout(초, 기본 30)]        → JSON
+ *              period, lateAfter(HH:MM), timeout(초, 기본 30), pin]   → JSON
  *   status   : 세션 상태/결과 조회. device                            → JSON
  *   cancel   : 세션 취소. device                                      → JSON
- *   students : 등록된 학생 목록                                       → JSON
- *   records  : 출석기록 조회. [date(yyyy-MM-dd, 기본 오늘), period]    → JSON
+ *   students : 등록된 학생 목록. [pin]                                → JSON
+ *   records  : 출석기록 조회. [date(yyyy-MM-dd, 기본 오늘), period, pin] → JSON
+ *   attended : 해당 날짜·교시의 출석 현황(학생별 완료 여부). period, [date] → JSON
  *   periods  : 교시설정 목록                                          → JSON
  *   ▸ ESP32가 부르는 것 (한 줄 텍스트 응답)
  *   poll     : 할 일 조회. device        → "IDLE" | "ATTEND" | "REGISTER"
  *   tag      : 카드 태그 보고. device, uid → "OK,이름,상태,시각" 등
+ *
+ * ── 비밀번호 보호 ──
+ *   [설정] 시트의 '비밀번호보호'가 ON이면 관리 기능(start·cancel·students·records)에
+ *   pin이 필요합니다. OFF(기본값)면 pin 없이도 동작합니다.
+ *   ESP32가 쓰는 poll·tag와 periods·attended는 언제나 pin 없이 동작합니다.
  */
 
 var SHEET_STUDENTS = '학생명단';
 var SHEET_LOG = '출석기록';
 var SHEET_PERIODS = '교시설정';
+var SHEET_CONFIG = '설정';
 
 function doGet(e)  { return route(e); }
 function doPost(e) { return route(e); }
 
 function route(e) {
   var p = (e && e.parameter) || {};
-  ensureSheets();   // 세 시트가 없으면 한 번에 만들어 둔다
+  ensureSheets();   // 시트가 없으면 한 번에 만들어 둔다
+
+  // 비밀번호 보호가 켜져 있으면 관리 기능은 pin을 확인한다
+  if (PROTECTED_ACTIONS.indexOf(p.action) >= 0 && !checkPin(p.pin)) {
+    return json({ ok: false, error: 'auth', message: '비밀번호가 필요합니다' });
+  }
+
   switch (p.action) {
+    case 'login':    return login(p);
     case 'start':    return startSession(p);
     case 'status':   return sessionStatus(p);
     case 'cancel':   return cancelSession(p);
     case 'students': return listStudents(p);
     case 'records':  return listRecords(p);
+    case 'attended': return listAttended(p);
     case 'periods':  return listPeriods(p);
     case 'poll':     return devicePoll(p);
     case 'tag':      return deviceTag(p);
@@ -47,7 +64,71 @@ function route(e) {
   }
 }
 
+// 비밀번호 보호가 켜졌을 때 pin이 필요한 기능들
+// (poll·tag는 ESP32가 쓰므로, periods·attended·status는 화면 표시용이므로 제외)
+var PROTECTED_ACTIONS = ['start', 'cancel', 'students', 'records'];
+
 // ────────────────────────── 앱 쪽 ──────────────────────────
+
+// 교사 비밀번호 확인 (앱의 로그인 화면용)
+// 보호가 꺼져 있으면 언제나 통과 → 앱은 로그인 화면을 건너뛰면 된다
+function login(p) {
+  if (!isProtected()) return json({ ok: true, protected: false });
+  if (checkPin(p.pin)) return json({ ok: true, protected: true });
+  return json({ ok: false, protected: true, message: '비밀번호가 올바르지 않습니다' });
+}
+
+// 해당 날짜·교시의 출석 현황 — 등록된 학생 전체에 출석 여부를 표시해서 돌려준다
+// 앱의 "출석 완료 / 미출석" 현황판에 쓴다
+function listAttended(p) {
+  var date = p.date || now('yyyy-MM-dd');
+  var period = String(p.period || '');
+
+  // 해당 날짜·교시의 출석기록을 UID로 찾아보기 쉽게 모은다
+  var logRows = getSheet(SHEET_LOG, ['날짜', '시각', '교시', 'UID', '이름', '상태', '리더기'])
+    .getDataRange().getValues();
+  var done = {};
+  for (var i = 1; i < logRows.length; i++) {
+    if (formatCellDate(logRows[i][0]) !== date) continue;
+    if (period && String(logRows[i][2]) !== period) continue;
+    done[String(logRows[i][3]).toUpperCase()] = {
+      time: formatCellTime(logRows[i][1]),
+      status: String(logRows[i][5])
+    };
+  }
+
+  // 등록된 학생 전체에 출석 여부를 붙인다
+  var stuRows = getSheet(SHEET_STUDENTS, ['UID', '이름', '학년', '반', '번호', '등록일시'])
+    .getDataRange().getValues();
+  var list = [];
+  var attended = 0, late = 0;
+  for (var j = 1; j < stuRows.length; j++) {
+    if (!stuRows[j][0]) continue;
+    var uid = String(stuRows[j][0]).toUpperCase();
+    var hit = done[uid] || null;
+    if (hit) {
+      attended++;
+      if (hit.status === '지각') late++;
+    }
+    list.push({
+      uid: uid,
+      name: String(stuRows[j][1]),
+      grade: String(stuRows[j][2]),
+      klass: String(stuRows[j][3]),
+      number: String(stuRows[j][4]),
+      checked: !!hit,
+      status: hit ? hit.status : '',
+      time: hit ? hit.time : ''
+    });
+  }
+
+  return json({
+    ok: true, date: date, period: period,
+    total: list.length, attended: attended, late: late,
+    absent: list.length - attended,
+    students: list
+  });
+}
 
 // 출석/등록 세션 시작. 세션은 리더기(device) 1대당 1개, 캐시에 저장(자동 만료)
 function startSession(p) {
@@ -270,6 +351,44 @@ function ensureSheets() {
   getSheet(SHEET_STUDENTS, ['UID', '이름', '학년', '반', '번호', '등록일시']);
   getSheet(SHEET_LOG, ['날짜', '시각', '교시', 'UID', '이름', '상태', '리더기']);
   getPeriodsSheet();
+  getConfigSheet();
+}
+
+// 설정 시트: 없으면 기본값으로 만든다 (비밀번호는 시트에서 직접 바꿔 쓰세요)
+function getConfigSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_CONFIG);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_CONFIG);
+    sheet.appendRow(['항목', '값']);
+    sheet.setFrozenRows(1);
+    sheet.appendRow(['교사비밀번호', '1234']);
+    sheet.appendRow(['비밀번호보호', 'OFF']);   // ON으로 바꾸면 관리 기능에 pin 필요
+    sheet.getRange('B2:B10').setNumberFormat('@');  // 0으로 시작하는 번호도 그대로
+  }
+  return sheet;
+}
+
+// 설정 시트에서 항목 값 읽기
+function getConfig(key) {
+  var rows = getConfigSheet().getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === key) return String(rows[i][1]).trim();
+  }
+  return '';
+}
+
+// 비밀번호 보호가 켜져 있는가
+function isProtected() {
+  return getConfig('비밀번호보호').toUpperCase() === 'ON';
+}
+
+// pin이 맞는가 (보호가 꺼져 있으면 언제나 통과)
+function checkPin(pin) {
+  if (!isProtected()) return true;
+  var real = getConfig('교사비밀번호');
+  if (!real) return true;               // 비밀번호가 비어 있으면 잠그지 않는다
+  return String(pin || '') === real;
 }
 
 // 시트가 없으면 머리글과 함께 만들어서 돌려준다

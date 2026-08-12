@@ -10,9 +10,10 @@
 | **학생명단** | UID · 이름 · 학년 · 반 · 번호 · 등록일시 | 학생증 등록 DB (등록 모드에서 자동 추가) |
 | **출석기록** | 날짜 · 시각 · 교시 · UID · 이름 · 상태 · 리더기 | 출석/지각 기록 (태그할 때마다 자동 추가) |
 | **교시설정** | 교시 · 시작시각 · 지각기준 | **지각 판정 기준** — 기본 1~7교시가 채워지며, 학교 시간표에 맞게 시트에서 직접 수정 |
+| **설정** | 항목 · 값 | **교사 비밀번호**(기본 `1234`)와 **비밀번호보호**(기본 `OFF`) — 시트에서 직접 수정, 즉시 반영 |
 
-세 시트 모두 **첫 요청이 들어올 때 한 번에 자동 생성**되므로 미리 만들 필요 없습니다.
-(배포 후 `배포URL?action=periods` 를 한 번만 열어도 세 탭이 모두 생깁니다)
+네 시트 모두 **첫 요청이 들어올 때 한 번에 자동 생성**되므로 미리 만들 필요 없습니다.
+(배포 후 `배포URL?action=periods` 를 한 번만 열어도 네 탭이 모두 생깁니다)
 지각 판정: 태그 시각이 해당 교시의 `지각기준`(HH:MM)을 넘으면 상태가 `지각`으로 기록됩니다.
 같은 날 같은 교시에 같은 학생이 또 태그하면 중복 기록하지 않고 `already`로 응답합니다.
 
@@ -78,6 +79,9 @@
 | `?action=students` | 등록된 학생 목록 `{students:[{uid,name,grade,klass,number,registeredAt}]}` |
 | `?action=records&date=&period=` | 출석기록 조회 (date 기본 오늘) `{records:[{date,time,period,uid,name,status,device}]}` |
 | `?action=periods` | 교시설정 목록 `{periods:[{period,start,lateAfter}]}` |
+| `?action=attended&period=&date=` | **출석 현황** — 등록 학생 전체에 출석 여부 표시 `{total, attended, late, absent, students:[{name,checked,status,time}]}` |
+| `?action=login&pin=` | 교사 비밀번호 확인 `{ok, protected}` (pin 없이 호출하면 보호 여부만 반환) |
 
 - 세션은 리더기 1대당 1개이며 `timeout`(기본 30초) 후 자동 만료됩니다.
+- **비밀번호 보호**: `설정` 시트의 `비밀번호보호`를 `ON`으로 두면 `start`·`cancel`·`students`·`records`에 `&pin=` 이 필요합니다. ESP32가 쓰는 `poll`·`tag`와 `periods`·`attended`·`status`는 잠기지 않습니다.
 - 지각 기준: `start`에 `lateAfter`(HH:MM)를 직접 넘기거나, 생략하면 `period`로 **교시설정 시트**에서 자동으로 찾습니다.
