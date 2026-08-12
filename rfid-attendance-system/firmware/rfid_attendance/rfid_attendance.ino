@@ -37,6 +37,10 @@ const char* DEVICE_ID  = "DEV001";   // 앱에 표시되는 리더기 이름 (1-
 #define PIN_LED     2    // 보드 내장 파란 LED
 #define PIN_BUZZER  4    // 수동부저 (없으면 안 달아도 됨 — 소리만 안 남)
 
+const unsigned long HTTP_TIMEOUT_MS = 25000; // 서버 응답 대기 한도 (25초)
+// ↑ Apps Script는 리다이렉트 때문에 요청이 두 번 일어나고, 스크립트가 처음 깨어날 때는
+//   시간이 더 걸린다. 핫스팟처럼 느린 회선에서는 10초로는 부족해 -11(시간 초과)이 난다.
+
 const unsigned long POLL_MS = 2000;          // 대기 중 폴링 간격 (2초)
 const unsigned long POLL_SESSION_MS = 5000;  // 세션 중 폴링 간격 (5초)
 // ↑ 서버 요청(HTTPS)은 한 번에 2~3초씩 걸려서 그동안 카드 스캔이 멈춘다.
@@ -202,27 +206,51 @@ void handleTagResult(String res) {
 }
 
 // HTTPS GET 요청 → 응답 본문(문자열) 반환
-// Apps Script는 응답할 때 주소를 한 번 이동(redirect)시키므로 따라가기 설정이 꼭 필요
+// Apps Script는 응답할 때 주소를 한 번 이동(redirect)시키므로 따라가기 설정이 꼭 필요.
+// 그래서 사실상 요청이 두 번 일어나고, 스크립트가 깨어나는 첫 요청은 더 느리다.
+// 타임아웃을 넉넉히 주고, 시간 초과(-11)면 한 번 더 시도한다.
 String httpGet(String url) {
-  WiFiClientSecure client;
-  client.setInsecure();   // 수업용: 인증서 검증 생략 (통신 자체는 HTTPS 암호화됨)
+  for (int attempt = 1; attempt <= 2; attempt++) {
+    WiFiClientSecure client;
+    client.setInsecure();          // 수업용: 인증서 검증 생략 (통신 자체는 HTTPS 암호화됨)
+    client.setTimeout(HTTP_TIMEOUT_MS / 1000);   // 이 함수는 '초' 단위
 
-  HTTPClient https;
-  https.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  https.setTimeout(10000);
+    HTTPClient https;
+    https.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    https.setTimeout(HTTP_TIMEOUT_MS);
+    https.setReuse(false);         // 매 요청마다 새 연결 (Apps Script 리다이렉트에 안전)
 
-  String body = "";
-  if (https.begin(client, url)) {
+    if (!https.begin(client, url)) {
+      Serial.println("서버 연결 준비 실패 (URL을 확인하세요)");
+      return "";
+    }
+
     int code = https.GET();
     if (code == HTTP_CODE_OK) {
-      body = https.getString();
+      String body = https.getString();
       body.trim();
-    } else {
-      Serial.println("HTTP 오류: " + String(code));
+      https.end();
+      return body;
     }
+
     https.end();
+    Serial.println("HTTP 오류: " + String(code) + explainHttpError(code));
+    if (code != -11 || attempt == 2) return "";   // 시간 초과일 때만 한 번 더
+    Serial.println("  → 다시 시도합니다...");
+    delay(500);
   }
-  return body;
+  return "";
+}
+
+// 자주 나오는 오류 코드에 설명을 붙여 준다
+String explainHttpError(int code) {
+  if (code == -11) return " (읽기 시간 초과 — 서버 응답이 느림/네트워크 지연)";
+  if (code == -1)  return " (연결 실패 — 인터넷 또는 URL 확인)";
+  if (code == -5)  return " (연결 끊김)";
+  if (code == -7)  return " (서버 응답 아님 — URL이 /exec 으로 끝나는지 확인)";
+  if (code == 401 || code == 403) return " (권한 — 배포 액세스를 '모든 사용자'로)";
+  if (code == 404) return " (주소 없음 — 배포 URL 확인)";
+  return "";
 }
 
 // 수동부저 삑 소리 (ms 만큼)
