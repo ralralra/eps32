@@ -33,6 +33,7 @@ function doPost(e) { return route(e); }
 
 function route(e) {
   var p = (e && e.parameter) || {};
+  ensureSheets();   // 세 시트가 없으면 한 번에 만들어 둔다
   switch (p.action) {
     case 'start':    return startSession(p);
     case 'status':   return sessionStatus(p);
@@ -261,6 +262,14 @@ function findLateAfter(period) {
     if (String(rows[i][0]) === String(period)) return formatCellTime(rows[i][2]).slice(0, 5);
   }
   return '';
+}
+
+// 어떤 요청이든 처음 들어올 때 세 시트를 한 번에 만들어 둔다.
+// (이렇게 해야 배포 직후 action=periods 한 번만 열어도 시트 구조 전체를 볼 수 있다)
+function ensureSheets() {
+  getSheet(SHEET_STUDENTS, ['UID', '이름', '학년', '반', '번호', '등록일시']);
+  getSheet(SHEET_LOG, ['날짜', '시각', '교시', 'UID', '이름', '상태', '리더기']);
+  getPeriodsSheet();
 }
 
 // 시트가 없으면 머리글과 함께 만들어서 돌려준다
