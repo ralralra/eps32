@@ -7,6 +7,7 @@
     3) 앱에서 출석체크(또는 등록)를 시작하면 → LED가 깜빡이며 카드 대기
        - 출석 모드: 천천히 깜빡 (0.5초)
        - 등록 모드: 빠르게 깜빡 (0.15초)
+       - LED는 내장 파란 LED(GPIO2)와 외부 LED(GPIO16)가 항상 같이 켜지고 꺼진다
     4) 학생증을 태그하면 UID를 중계서버로 보내고, 결과에 따라 부저가 울린다
        - 성공: 삑삑 (짧게 2번)
        - 실패(미등록/카드 불일치 등): 삐— (길게 1번)
@@ -35,6 +36,7 @@ const char* DEVICE_ID  = "DEV001";   // 앱에 표시되는 리더기 이름 (1-
 #define PIN_SS      5    // RC522 SDA(SS)
 #define PIN_RST     27   // RC522 RST
 #define PIN_LED     2    // 보드 내장 파란 LED
+#define PIN_LED_EXT 16   // 외부 LED (긴 다리 → GPIO16, 짧은 다리 → 저항(220Ω쯤) → GND)
 #define PIN_BUZZER  4    // 수동부저 (없으면 안 달아도 됨 — 소리만 안 남)
 
 const unsigned long HTTP_TIMEOUT_MS = 25000; // 서버 응답 대기 한도 (25초)
@@ -46,6 +48,9 @@ const unsigned long POLL_SESSION_MS = 5000;  // 세션 중 폴링 간격 (5초)
 // ↑ 서버 요청(HTTPS)은 한 번에 2~3초씩 걸려서 그동안 카드 스캔이 멈춘다.
 //   세션 중에는 폴링을 뜸하게 해서 카드 스캔 시간을 최대한 확보한다.
 
+const unsigned long RFID_CHECK_MS = 5000;    // 리더기 상태 자가진단 간격 (5초)
+const unsigned long SAME_CARD_MS  = 1500;    // 같은 카드 연속 인식 무시 시간 (1.5초)
+
 MFRC522 rfid(PIN_SS, PIN_RST);
 
 // 현재 상태: IDLE(대기) / ATTEND(출석 세션) / REGISTER(등록 세션)
@@ -54,23 +59,35 @@ unsigned long lastPoll = 0;
 unsigned long lastBlink = 0;
 bool ledOn = false;
 
+unsigned long lastRfidCheck = 0;  // 마지막 리더기 자가진단 시각
+String lastUid = "";              // 마지막으로 처리한 카드 UID
+unsigned long lastTagMs = 0;      // 그 카드를 처리한 시각
+
+// 내장 LED와 외부 LED(GPIO16)를 항상 같이 켜고 끈다
+void setLed(bool on) {
+  digitalWrite(PIN_LED,     on ? HIGH : LOW);
+  digitalWrite(PIN_LED_EXT, on ? HIGH : LOW);
+}
+
 void setup() {
   Serial.begin(115200);
   pinMode(PIN_LED, OUTPUT);
+  pinMode(PIN_LED_EXT, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT);
-  digitalWrite(PIN_LED, LOW);
+  setLed(false);
 
   SPI.begin();          // SCK=18, MISO=19, MOSI=23
-  rfid.PCD_Init();
-  delay(100);
-  // 안테나 감도를 최대로 (기본값은 중간 — 인식 거리가 짧으면 필수)
-  rfid.PCD_SetAntennaGain(MFRC522::RxGain_max);
-  // 송신 출력 부스트 — 안테나가 작은 카드(학생증·유스카드 등)도 깨울 수 있게
-  // 반송파 구동 세기를 최대로 올린다 (uid_test에서 검증된 설정)
-  rfid.PCD_WriteRegister(MFRC522::GsNReg, 0xF8);    // 기본 0x88
-  rfid.PCD_WriteRegister(MFRC522::CWGsPReg, 0x3F);  // 기본 0x20
+  rfidInit();
 
+  // 리더기가 응답하는지 자가진단 (배선이 틀리면 0x00 또는 0xFF가 나옴)
+  byte version = rfid.PCD_ReadRegister(MFRC522::VersionReg);
   Serial.println();
+  Serial.print("RC522 버전 레지스터: 0x");
+  Serial.println(version, HEX);
+  if (version == 0x00 || version == 0xFF) {
+    Serial.println("⚠️ 리더기 응답 없음! 배선을 다시 확인하세요 (특히 3.3V, SDA=5, RST=27)");
+  }
+
   Serial.print("와이파이 접속 중");
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
@@ -86,6 +103,35 @@ void setup() {
 
   Serial.println("앱에서 [출석체크 시작]을 누르면 LED가 깜빡입니다.");
   beep(80); beep(80);   // 준비 완료 알림
+}
+
+// RC522 초기화 + 인식 성능 설정을 한 곳에 모았다.
+// 리더기를 재초기화할 때마다 이 설정을 다시 넣어야 해서 함수로 분리.
+void rfidInit() {
+  rfid.PCD_Init();
+  delay(50);
+  // 안테나 감도를 최대로 (기본값은 중간 — 인식 거리가 짧으면 필수)
+  rfid.PCD_SetAntennaGain(MFRC522::RxGain_max);
+  // 송신 출력 부스트 — 안테나가 작은 카드(학생증·유스카드 등)도 깨울 수 있게
+  // 반송파 구동 세기를 최대로 올린다 (uid_test에서 검증된 설정)
+  rfid.PCD_WriteRegister(MFRC522::GsNReg, 0xF8);    // 기본 0x88
+  rfid.PCD_WriteRegister(MFRC522::CWGsPReg, 0x3F);  // 기본 0x20
+}
+
+// 리더기가 살아있는지 5초마다 확인하고, 이상하면 재초기화한다.
+// RC522는 오래 켜두거나 전원이 살짝 흔들리면 말없이 먹통이 되는 일이 흔한데,
+// 그 상태에서는 카드를 아무리 대도 인식이 안 된다. 재초기화하면 바로 살아난다.
+void checkRfidHealth() {
+  if (millis() - lastRfidCheck < RFID_CHECK_MS) return;
+  lastRfidCheck = millis();
+
+  byte version = rfid.PCD_ReadRegister(MFRC522::VersionReg);
+  byte txControl = rfid.PCD_ReadRegister(MFRC522::TxControlReg);
+  // version이 0x00/0xFF면 통신 두절, 안테나 비트(하위 2개)가 꺼져 있으면 전파 송신 중단
+  if (version == 0x00 || version == 0xFF || (txControl & 0x03) != 0x03) {
+    Serial.println("⚠️ 리더기 응답 이상 → 재초기화");
+    rfidInit();
+  }
 }
 
 // 부팅할 때 중계서버를 한 번 점검한다.
@@ -156,17 +202,20 @@ void loop() {
   // ① 카드 확인이 최우선 — loop가 도는 동안 거의 빈틈없이 카드를 스캔한다
   if (handleCard()) return;
 
-  // ② 세션 중이면 LED 깜빡이기 (출석: 0.5초 / 등록: 0.15초)
+  // ② 리더기가 먹통이 되지 않았는지 주기적으로 자가진단
+  checkRfidHealth();
+
+  // ③ 세션 중이면 LED 깜빡이기 (출석: 0.5초 / 등록: 0.15초)
   if (mode != "IDLE") {
     unsigned long interval = (mode == "REGISTER") ? 150 : 500;
     if (millis() - lastBlink >= interval) {
       lastBlink = millis();
       ledOn = !ledOn;
-      digitalWrite(PIN_LED, ledOn ? HIGH : LOW);
+      setLed(ledOn);
     }
   }
 
-  // ③ 주기적으로 중계서버에 할 일이 있는지 물어본다
+  // ④ 주기적으로 중계서버에 할 일이 있는지 물어본다
   //    (요청하는 동안 스캔이 멈추므로, 세션 중에는 간격을 길게)
   unsigned long pollInterval = (mode == "IDLE") ? POLL_MS : POLL_SESSION_MS;
   if (millis() - lastPoll >= pollInterval) {
@@ -178,7 +227,7 @@ void loop() {
     if (res == "ATTEND" || res == "REGISTER" || res == "IDLE") {
       if (res != mode) {
         Serial.println("모드 변경: " + mode + " → " + res);
-        if (res == "IDLE") digitalWrite(PIN_LED, LOW);
+        if (res == "IDLE") setLed(false);
       }
       mode = res;
     }
@@ -194,35 +243,48 @@ bool handleCard() {
   rfid.PICC_HaltA();
   rfid.PCD_StopCrypto1();
 
+  // 같은 카드가 1.5초 안에 또 읽히면 무시 (카드를 대고 있는 동안 중복 처리 방지)
+  // 예전엔 delay(1000)로 통째로 멈췄는데, 그동안 다음 사람 카드도 못 읽었다.
+  // 이제는 멈추지 않아서 다른 카드는 바로바로 인식된다.
+  if (uid == lastUid && millis() - lastTagMs < SAME_CARD_MS) return false;
+  lastUid = uid;
+  lastTagMs = millis();
+
   if (mode == "IDLE") {
     // 세션이 없을 때도 카드가 잘 읽히는지 시리얼로 확인할 수 있게 출력만 한다
     Serial.println("카드 인식 (세션 없음 → 전송 안 함): UID = " + uid);
-    delay(1000);               // 같은 카드 연속 인식 방지
     return true;
   }
 
   Serial.println("태그됨! UID = " + uid + " → 서버 전송");
-  digitalWrite(PIN_LED, HIGH);
+  setLed(true);
 
   String res = httpGet(String(RELAY_URL) + "?action=tag&device=" + DEVICE_ID + "&uid=" + uid);
   handleTagResult(res);
 
   mode = "IDLE";               // 처리 끝 → 대기 상태로
-  digitalWrite(PIN_LED, LOW);
+  setLed(false);
   lastPoll = millis();         // 방금 통신했으니 다음 폴링은 나중에
-  delay(1000);                 // 같은 카드 연속 인식 방지
   return true;
 }
 
 // 카드가 리더기 위에 있는지 WUPA(깨우기) 방식으로 확인
 // 학생증 같은 보안 스마트카드(ISO 14443-4)는 일반 감지(REQA)에 응답하지 않는
 // 경우가 있어서 WUPA 방식이 훨씬 안정적으로 잡는다.
+// 카드가 전파 범위 가장자리에 있으면 첫 시도는 실패하고 두 번째에 잡히는 일이
+// 많아서, 한 번의 호출에서 두 번까지 시도한다.
 bool cardTagged() {
-  byte atqa[2];
-  byte atqaSize = sizeof(atqa);
-  MFRC522::StatusCode st = rfid.PICC_WakeupA(atqa, &atqaSize);
-  if (st != MFRC522::STATUS_OK && st != MFRC522::STATUS_COLLISION) return false;
-  return rfid.PICC_ReadCardSerial();
+  for (int attempt = 0; attempt < 2; attempt++) {
+    byte atqa[2];
+    byte atqaSize = sizeof(atqa);
+    MFRC522::StatusCode st = rfid.PICC_WakeupA(atqa, &atqaSize);
+    if ((st == MFRC522::STATUS_OK || st == MFRC522::STATUS_COLLISION) &&
+        rfid.PICC_ReadCardSerial()) {
+      return true;
+    }
+    delay(5);   // 카드가 깨어날 시간을 살짝 주고 한 번 더
+  }
+  return false;
 }
 
 // UID를 "A1B2C3D4" 형태의 대문자 16진수 문자열로
