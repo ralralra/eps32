@@ -54,7 +54,7 @@
 | [`04_attendance/`](04_attendance/README.md) | 스마트 출석·안전 | ★☆☆ | 홀(도어)·7세그 | NFC → 웹 QR 체크인 |
 | [`05_store/`](05_store/README.md) | 스마트 매점 | ★★☆ | 7세그·무게·진동 | RFID → 웹 버튼+무게 감지 |
 | [`06_umbrella/`](06_umbrella/README.md) | 스마트 우산 대여 | ★★☆ | 초음파·무게·7세그 | RFID → 웹 QR+거치 감지 |
-| [`07_kiosk/`](07_kiosk/README.md) | 창업 키오스크 | ★★☆ | 7세그(주문번호)·소리 | 실결제 → 가상 포인트 |
+| [`07_kiosk/`](07_kiosk/README.md) | 창업 키오스크 | ★★☆ | 없음 — 앱 + DB(시트)만 | 실결제 → 가상 결제 연출 |
 
 - 각 프로젝트 폴더는 **단계별(step) 실습** 구조 — 한 단계씩 확인하며 진행
 - **우회는 미완성이 아니라 설계 전략** — 발표에서 가점 요소예요! ([7회차 평가 기준](02_sessions/07_final_presentation/README.md))

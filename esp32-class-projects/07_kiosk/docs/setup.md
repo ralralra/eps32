@@ -1,25 +1,28 @@
-# 키오스크 설정 (Wemos D1 R32)
+# 키오스크 설정 (앱 + DB 전용)
 
-> 보드 처음 세팅(드라이버·IDE·보드 패키지): [`01_docs/setup_wemos_d1_r32.md`](../../01_docs/setup_wemos_d1_r32.md)
+## 회로·보드 — 없음!
+이 프로젝트는 **하드웨어를 쓰지 않아요.** 브라우저(폰·태블릿·PC)와 구글 계정만 있으면 됩니다.
+앱은 **AI Studio**로 만들어요 — 사용법·폰 설치(PWA): [`01_docs/ai_studio_webapp_guide.md`](../../01_docs/ai_studio_webapp_guide.md)
 
-## 회로 — 없음!
-Wemos D1 R32 + USB 케이블만 있으면 됩니다. 추가 부품·배선 없음.
-화면은 폰/태블릿 브라우저예요. (태블릿이 키오스크 느낌이 더 납니다)
+## DB(구글 시트) 준비 — 3단계부터
 
-## 보드 설정
-- Board: **ESP32 Dev Module**
-- Upload Speed: 115200
-- Partition Scheme: **Default 4MB with spiffs** (3·4단계 저장용)
+1. 구글 시트 새로 만들기 — 이름 예: `푸메콥스_주문DB`
+2. 탭 이름을 `주문로그` 로 바꾸고 1행에 제목 입력:
 
-## 접속
-1. 업로드 후 시리얼에 `http://192.168.4.1` 확인
-2. 폰/태블릿 와이파이 `ESP32-Kiosk` 접속 (비번 `kiosk1234`)
-3. 브라우저에서 **http://192.168.4.1**
+   | 시각 | 주문번호 | 내역 | 합계 |
+   |---|---|---|---|
 
-## 포인트/매출 초기화
-- 매출: `/sales` → "매출 초기화"
-- 포인트 잔액 초기화: SPIFFS의 `/balance.txt` 삭제가 필요. 간단히는
-  업로드 시 `Tools → Erase All Flash Before Sketch Upload: Enabled` 로 한 번 지우면 시작 포인트(10000)로 리셋됩니다.
+3. 확장 프로그램 → **Apps Script** → 해당 단계의 `.gs` 코드 붙여넣기
+4. 배포 → **웹 앱** (액세스: 모든 사용자) → **배포 URL 복사**
+   - 자세한 배포 방법: [4회차 — Apps Script 배포](../../02_sessions/04_cloud_expansion/README.md)
+5. 각 단계 `프롬프트.md` 의 `배포URL` 자리에 복사한 URL을 넣어 AI Studio에 지시
+
+## 매출 초기화
+시트에서 주문로그의 데이터 행(2행부터)을 지우면 끝 — 제목 행은 남겨두세요.
 
 ## 문제 해결
-웹 접속/Brownout 등은 출석 프로젝트의 [`04_attendance/docs/troubleshooting.md`](../../04_attendance/docs/troubleshooting.md) 와 동일합니다.
+| 증상 | 해결 |
+|---|---|
+| 주문해도 시트에 안 쌓여요 | `SCRIPT_URL` 이 배포 URL인지 확인 (`/exec` 로 끝나야 해요). 코드 수정 후엔 **새 배포**! |
+| 브라우저 주소창으로 `URL?action=order&items=테스트:1000&total=1000` 열기 | 시트에 줄이 생기면 서버는 정상 — 앱 쪽 URL 오타예요 |
+| 관리자 화면 숫자가 안 나와요 | `URL?action=sales` 를 직접 열어 JSON이 보이는지 확인 |
