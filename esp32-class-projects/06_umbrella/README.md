@@ -31,6 +31,7 @@
 | 2 | `step2_rent_return` | 학생 → 우산 순서로 태그해 대여/반납 — 시리얼 |
 | 3 | `step3_save_log` | 대여 기록을 보드에 저장(SPIFFS) — 시리얼 |
 | 4 | `step4_web_status` | 폰으로 대여 현황·미반납 보기 — 폰 |
+| 5 | `step5_locker` | **스마트 보관함**: 서보 잠금 4 + 리드센서 4 + 구글 시트 DB — 폰·시트 |
 
 ## 준비물
 - Wemos D1 R32 + USB
@@ -43,7 +44,8 @@
 
 ### 보관함(잠금장치) 확장 — 서보 4개 + 리드센서 4개
 슬롯 4칸 보관함(서보 잠금 + 우산 거치 감지)을 만드는 팀은
-→ **[`docs/wiring_servo_reed.md`](docs/wiring_servo_reed.md)** 배선표를 보세요. (RFID와 핀 충돌 없음)
+→ 배선표: **[`docs/wiring_servo_reed.md`](docs/wiring_servo_reed.md)** (RFID와 핀 충돌 없음)
+→ 코드(펌웨어 + Apps Script): **[`step5_locker/`](step5_locker/README.md)** — 구글 시트를 DB로 사용
 
 ## ⏰ 시각 안내
 ESP32는 인터넷(시계)이 없어 정확한 날짜·시각 기록은 RTC 모듈이나 WiFi+NTP가 필요합니다.
