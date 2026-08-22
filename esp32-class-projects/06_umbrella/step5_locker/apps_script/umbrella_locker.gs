@@ -38,7 +38,8 @@ function doGet(e) {
     if (a === "status") return json(status());
     if (a === "cmd")    return text(popCommand());
     if (a === "report") return json(report(e));
-    return json({ ok: false, error: "action을 지정하세요 (rent/return/status/cmd/report)" });
+    if (a === "cancel") return json(cancelRental(e));
+    return json({ ok: false, error: "action을 지정하세요 (rent/return/status/cmd/report/cancel)" });
   } catch (err) {
     return json({ ok: false, error: String(err) });
   } finally {
@@ -127,6 +128,22 @@ function status() {
     umbrella_id: r.umbrella_id, locker_id: r.locker_id,
     slot_no: r.slot_no, status: r.status, last_user_id: r.last_user_id
   })) };
+}
+
+// 대여 취소: ESP32가 "우산이 안 빠졌어요"라고 알릴 때 — DB를 대여 전으로 되돌림
+function cancelRental(e) {
+  const slot = parseInt(e.parameter.slot);
+  const rental = sheetTable(TAB.rentals).rows.find(r =>
+    parseInt(r.slot_no) === slot && r.status === "active");
+  if (!rental) return { ok: false, error: "슬롯 " + slot + "의 대여 중 기록이 없어요" };
+
+  const now = new Date();
+  updateRow(TAB.rentals, "rental_id", rental.rental_id,
+            { status: "canceled", return_time: now, duration_min: 0 });
+  updateRow(TAB.umbrellas, "umbrella_id", rental.umbrella_id,
+            { status: "available", last_check_time: now });
+  bumpAvailableSlots(rental.locker_id, +1);
+  return { ok: true, rental_id: rental.rental_id, canceled: true };
 }
 
 // ESP32 보고: 슬롯별 우산 유무(p1~p4) → last_check_time 갱신
