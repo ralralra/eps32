@@ -1,16 +1,27 @@
 /*
-  5단계 — 스마트 보관함 (완성본: 서보 4개 + 리드센서 4개 + 구글 시트 DB)
+  5단계 — 스마트 보관함 (서보 4개 + 리드스위치 4개, 센서쉴드 버전)
   ----------------------------------------------------------------------
-  구조:
-    [폰 웹앱] 대여/반납 버튼 → [Apps Script] 시트(DB) 갱신 + 명령 큐에 "RENT:슬롯"
-        ↓ (ESP32가 3초마다 폴링)
-    [ESP32] 명령 수신 → 서보 열림 → 리드센서로 우산 빠짐/거치 확인 → 서보 잠금
-        ↓
-    [ESP32] 30초마다 슬롯별 우산 유무를 시트에 보고 (last_check_time)
+  슬롯마다 서보(잠금)와 리드스위치(우산 감지)가 짝을 이룹니다.
+    리드스위치 감지(자석 가까이) = 우산 있음 / 감지 안 됨 = 우산 없음
 
-  배선: docs/wiring_servo_reed.md (서보 16·17·25·26 / 리드 13·14·21·22)
-  라이브러리: ESP32Servo (라이브러리 매니저에서 "ESP32Servo" 검색)
+  ● 대여: 명령 → 열림(100도) → 5초 → 닫힘(20도) → 리드 확인
+       우산 없음 → ✓ 대여완료
+       우산 그대로 → ✗ 대여실패 (시트의 대여 기록 자동 취소)
+  ● 반납: 명령 → 열림 → 5초 → 닫힘 → 리드 확인
+       우산 감지 → ✓ 반납완료
+       감지 안 됨 → 다시 열렸다가 닫힘 (최대 3회 반복 후 실패 처리)
 
+  명령은 두 가지 방법으로 들어옵니다:
+    ① 앱: Apps Script 명령 큐를 3초마다 폴링 ("RENT:2" / "RETURN:3")
+    ② 시리얼 모니터(115200): r1~r4 = 대여, b1~b4 = 반납, s = 상태 보기
+       (WiFi 없이 시리얼만으로도 전체 테스트 가능 — 15초 후 오프라인 모드)
+
+  배선: docs/wiring_servo_reed.md — 센서쉴드에 그대로 꽂으면 됩니다
+    서보 신호: GPIO16·17·25·26 (실드 숫자 5·4·3·2)
+    리드:      GPIO13·14·21·22 (실드 숫자 9·7·SDA·SCL)
+  ⚠ 서보 전원은 실드의 외부 전원 단자에 5V — 보드 전원으로 4개 돌리면 리셋돼요!
+
+  라이브러리: ESP32Servo (기본 Servo.h는 ESP32에서 안 됩니다)
   ★ 바꿀 곳: WiFi 이름·비번, 웹앱 URL (끝이 /exec!)
 */
 
@@ -22,27 +33,30 @@ const char* WIFI_SSID = "WiFi이름";
 const char* WIFI_PASS = "비밀번호";
 const char* URL = "https://script.google.com/macros/s/XXXX/exec";
 
-#define LED 2                                    // 내장 LED — 동작 확인용 신호등
+#define LED 2                                    // 내장 LED — 동작 확인용
 
 const int SLOT_COUNT = 4;
-const int SERVO_PIN[SLOT_COUNT] = { 16, 17, 25, 26 };   // 슬롯 1~4 잠금
-const int REED_PIN[SLOT_COUNT]  = { 13, 14, 21, 22 };   // 슬롯 1~4 우산 감지
+const int SERVO_PIN[SLOT_COUNT] = { 16, 17, 25, 26 };   // 슬롯 1~4 (실드 5·4·3·2)
+const int REED_PIN[SLOT_COUNT]  = { 13, 14, 21, 22 };   // 슬롯 1~4 (실드 9·7·SDA·SCL)
 
-const int ANGLE_LOCKED = 0;      // ★ 기구에 맞게 조정
-const int ANGLE_OPEN   = 90;
+const int ANGLE_CLOSED = 20;                // 닫힘(잠김) 각도
+const int ANGLE_OPEN   = 100;               // 열림 각도
+const unsigned long OPEN_TIME_MS  = 5000;   // 열려 있는 시간 (5초)
+const unsigned long SETTLE_MS     = 600;    // 서보가 닫힐 때까지 잠깐 대기
+const int RETURN_RETRY_MAX = 3;             // 반납 시 다시 열어주는 최대 횟수
 
-const unsigned long POLL_MS     = 3000;    // 명령 폴링 주기
-const unsigned long REPORT_MS   = 30000;   // 슬롯 상태 보고 주기
-const unsigned long DOOR_WAIT_MS = 20000;  // 문 열고 기다리는 최대 시간
+const unsigned long POLL_MS   = 3000;       // 앱 명령 폴링 주기
+const unsigned long REPORT_MS = 30000;      // 슬롯 상태 보고 주기
 
 Servo servos[SLOT_COUNT];
+bool online = false;                        // WiFi 연결 여부 (없어도 시리얼은 동작)
 unsigned long lastPoll = 0, lastReport = 0;
 
-// 리드센서: 자석 가까이(우산 있음) → LOW
+// 리드스위치: 자석 가까이(우산 있음) → LOW
 bool umbrellaPresent(int i) { return digitalRead(REED_PIN[i]) == LOW; }
 
 String httpGET(String query) {
-  if (WiFi.status() != WL_CONNECTED) return "";
+  if (!online) return "";
   HTTPClient http;
   http.begin(String(URL) + query);
   http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
@@ -52,18 +66,23 @@ String httpGET(String query) {
   return body;
 }
 
-void blinkOK() {                 // 성공 알림: 짧게 2회 (알림 문법 통일)
+void blinkOK() {                 // 성공: 짧게 2회
   for (int i = 0; i < 2; i++) {
     digitalWrite(LED, HIGH); delay(150);
     digitalWrite(LED, LOW);  delay(150);
   }
 }
-
-void blinkWarn() {               // 경고: 빠른 연속 점멸
+void blinkWarn() {               // 실패·경고: 빠른 연속 점멸
   for (int i = 0; i < 6; i++) {
     digitalWrite(LED, HIGH); delay(80);
     digitalWrite(LED, LOW);  delay(80);
   }
+}
+
+void printStatus() {
+  Serial.println("── 슬롯 상태 ──");
+  for (int i = 0; i < SLOT_COUNT; i++)
+    Serial.printf("  슬롯 %d: 우산 %s\n", i + 1, umbrellaPresent(i) ? "있음" : "없음");
 }
 
 // 슬롯별 우산 유무를 시트에 보고 (p1~p4: 1=있음, 0=없음)
@@ -74,78 +93,129 @@ void reportSlots() {
   httpGET(q);
 }
 
-// 문 열기 → 리드센서 변화 대기 → 잠그기
-//   takeOut=true  : 대여 — 우산이 "빠질 때"까지 기다림
-//   takeOut=false : 반납 — 우산이 "꽂힐 때"까지 기다림
-void openSlot(int slot, bool takeOut) {
-  int i = slot - 1;
-  if (i < 0 || i >= SLOT_COUNT) return;
-
-  Serial.printf("슬롯 %d 열림 (%s 대기)\n", slot, takeOut ? "우산 빠짐" : "우산 거치");
+// 열림 → 5초 → 닫힘 (한 사이클)
+void openCloseCycle(int i) {
   servos[i].write(ANGLE_OPEN);
+  delay(OPEN_TIME_MS);
+  servos[i].write(ANGLE_CLOSED);
+  delay(SETTLE_MS);              // 닫힌 뒤 리드 값이 안정될 때까지
+}
 
-  bool done = false;
-  unsigned long start = millis();
-  while (millis() - start < DOOR_WAIT_MS) {
-    bool present = umbrellaPresent(i);
-    if (takeOut && !present) { done = true; break; }   // 대여: 우산 빠짐 확인
-    if (!takeOut && present) { done = true; break; }   // 반납: 우산 거치 확인
-    delay(100);
+// ── 대여 ──────────────────────────────────────────────
+void doRent(int slot) {
+  int i = slot - 1;
+  if (i < 0 || i >= SLOT_COUNT) { Serial.println("슬롯 번호는 1~4 입니다"); return; }
+
+  if (!umbrellaPresent(i)) {     // 빈 슬롯은 빌려줄 우산이 없음
+    Serial.printf("✗ 슬롯 %d: 우산이 없어서 대여할 수 없어요\n", slot);
+    blinkWarn();
+    httpGET("?action=cancel&slot=" + String(slot));   // 시트의 대여 기록 취소
+    return;
   }
 
-  delay(1500);                  // 손 빼고 문 닫을 여유
-  servos[i].write(ANGLE_LOCKED);
-  Serial.printf("슬롯 %d 잠김 — %s\n", slot, done ? "정상 처리" : "시간 초과!");
+  Serial.printf("슬롯 %d 열림 — 5초 안에 우산을 꺼내세요!\n", slot);
+  openCloseCycle(i);
 
-  if (done) blinkOK(); else blinkWarn();
-  reportSlots();                // 처리 직후 최신 상태 보고
+  if (!umbrellaPresent(i)) {
+    Serial.printf("✓ 슬롯 %d 대여완료!\n", slot);
+    blinkOK();
+  } else {
+    Serial.printf("✗ 슬롯 %d 대여실패 — 우산이 그대로 있어요 (대여 취소)\n", slot);
+    blinkWarn();
+    httpGET("?action=cancel&slot=" + String(slot));   // DB도 원래대로 되돌리기
+  }
+  reportSlots();
+}
+
+// ── 반납 ──────────────────────────────────────────────
+void doReturn(int slot) {
+  int i = slot - 1;
+  if (i < 0 || i >= SLOT_COUNT) { Serial.println("슬롯 번호는 1~4 입니다"); return; }
+
+  for (int attempt = 1; attempt <= RETURN_RETRY_MAX; attempt++) {
+    Serial.printf("슬롯 %d 열림 — 5초 안에 우산을 꽂으세요! (%d번째)\n", slot, attempt);
+    openCloseCycle(i);
+
+    if (umbrellaPresent(i)) {
+      Serial.printf("✓ 슬롯 %d 반납완료!\n", slot);
+      blinkOK();
+      reportSlots();
+      return;
+    }
+    Serial.println("  우산이 감지되지 않아요 — 다시 열게요");
+  }
+  Serial.printf("✗ 슬롯 %d 반납실패 — %d번 열어도 우산이 감지되지 않았어요\n",
+                slot, RETURN_RETRY_MAX);
+  blinkWarn();
+  reportSlots();
+}
+
+// ── 명령 해석 (앱 폴링·시리얼 공용) ─────────────────────
+//   RENT:2 / RETURN:3  또는  r2 / b3 / s
+void handleCommand(String cmd) {
+  cmd.trim();
+  cmd.toUpperCase();
+  if (cmd.length() == 0) return;
+
+  if (cmd == "S")                    { printStatus(); return; }
+  if (cmd.startsWith("RENT:"))       { doRent(cmd.substring(5).toInt());    return; }
+  if (cmd.startsWith("RETURN:"))     { doReturn(cmd.substring(7).toInt());  return; }
+  if (cmd[0] == 'R' && cmd.length() == 2) { doRent(cmd.substring(1).toInt());   return; }
+  if (cmd[0] == 'B' && cmd.length() == 2) { doReturn(cmd.substring(1).toInt()); return; }
+
+  Serial.println("모르는 명령: " + cmd + "  (r1~r4=대여, b1~b4=반납, s=상태)");
 }
 
 void setup() {
   Serial.begin(115200);
+  delay(300);
   pinMode(LED, OUTPUT);
+
   for (int i = 0; i < SLOT_COUNT; i++) {
     pinMode(REED_PIN[i], INPUT_PULLUP);
-    servos[i].attach(SERVO_PIN[i]);
-    servos[i].write(ANGLE_LOCKED);
+    servos[i].setPeriodHertz(50);
+    servos[i].attach(SERVO_PIN[i], 500, 2400);
+    servos[i].write(ANGLE_CLOSED);       // 시작은 모두 잠김
   }
 
+  Serial.println("\n=== 스마트 우산 보관함 ===");
+  Serial.println("시리얼 명령: r1~r4 = 대여, b1~b4 = 반납, s = 상태 보기");
+
+  // WiFi는 15초만 시도 — 안 되면 시리얼 전용(오프라인)으로 계속
   WiFi.begin(WIFI_SSID, WIFI_PASS);
-  while (WiFi.status() != WL_CONNECTED) {
+  unsigned long start = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < 15000) {
     delay(500);
     Serial.print(".");
   }
-  Serial.println(" WiFi 연결 완료!");
-  Serial.println("=== 스마트 우산 보관함 시작 ===");
+  online = (WiFi.status() == WL_CONNECTED);
+  Serial.println(online ? " WiFi 연결 완료 — 앱 명령 대기!"
+                        : " WiFi 없음 — 시리얼 전용 모드");
 
-  for (int i = 0; i < SLOT_COUNT; i++)
-    Serial.printf("  슬롯 %d: 우산 %s\n", i + 1, umbrellaPresent(i) ? "있음" : "없음");
+  printStatus();
   reportSlots();
 }
 
 void loop() {
-  if (WiFi.status() != WL_CONNECTED) {     // 끊기면 재접속
-    Serial.println("WiFi 재접속...");
-    WiFi.reconnect();
-    delay(3000);
-    return;
+  // ── ① 시리얼 명령 ──
+  if (Serial.available()) {
+    handleCommand(Serial.readStringUntil('\n'));
   }
 
-  // ── ① 명령 폴링: "RENT:2" / "RETURN:3" ──────────────
-  if (millis() - lastPoll >= POLL_MS) {
+  // ── ② 앱 명령 폴링 ──
+  if (online && millis() - lastPoll >= POLL_MS) {
     lastPoll = millis();
-    String cmd = httpGET("?action=cmd");   // 읽으면 서버가 큐를 비움
-    cmd.trim();
-    if (cmd.startsWith("RENT:"))
-      openSlot(cmd.substring(5).toInt(), true);
-    else if (cmd.startsWith("RETURN:"))
-      openSlot(cmd.substring(7).toInt(), false);
-    else if (cmd.length() > 0)
-      Serial.println("알 수 없는 명령: " + cmd);
+    if (WiFi.status() != WL_CONNECTED) {   // 끊기면 재접속 시도
+      Serial.println("WiFi 재접속...");
+      WiFi.reconnect();
+    } else {
+      String cmd = httpGET("?action=cmd"); // 읽으면 서버가 큐를 비움
+      if (cmd.length() > 0) handleCommand(cmd);
+    }
   }
 
-  // ── ② 주기적 상태 보고 ─────────────────────────────
-  if (millis() - lastReport >= REPORT_MS) {
+  // ── ③ 주기적 상태 보고 ──
+  if (online && millis() - lastReport >= REPORT_MS) {
     lastReport = millis();
     reportSlots();
   }
