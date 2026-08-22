@@ -18,7 +18,7 @@
 
   배선: docs/wiring_servo_reed.md — 센서쉴드에 그대로 꽂으면 됩니다
     서보 신호: GPIO16·17·25·26 (실드 숫자 5·4·3·2)
-    리드:      GPIO13·14·21·22 (실드 숫자 9·7·SDA·SCL)
+    리드:      GPIO13·14·27·4  (실드 숫자 9·7·6·A1)
   ⚠ 서보 전원은 실드의 외부 전원 단자에 5V — 보드 전원으로 4개 돌리면 리셋돼요!
 
   라이브러리: ESP32Servo (기본 Servo.h는 ESP32에서 안 됩니다)
@@ -37,7 +37,7 @@ const char* URL = "https://script.google.com/macros/s/XXXX/exec";
 
 const int SLOT_COUNT = 4;
 const int SERVO_PIN[SLOT_COUNT] = { 16, 17, 25, 26 };   // 슬롯 1~4 (실드 5·4·3·2)
-const int REED_PIN[SLOT_COUNT]  = { 13, 14, 21, 22 };   // 슬롯 1~4 (실드 9·7·SDA·SCL)
+const int REED_PIN[SLOT_COUNT]  = { 13, 14, 27, 4 };    // 슬롯 1~4 (실드 9·7·6·A1)
 
 const int ANGLE_CLOSED = 20;                // 닫힘(잠김) 각도
 const int ANGLE_OPEN   = 100;               // 열림 각도
