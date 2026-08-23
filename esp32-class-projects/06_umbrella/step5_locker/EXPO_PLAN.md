@@ -34,6 +34,9 @@
 
 앱은 아래 주소만 호출하면 됩니다. **서버 주소는 구글 시트 `시트1` 탭의 `/exec` URL**입니다.
 
+> 📱 **앱 화면별 연동 코드는 [`app/screens.md`](app/screens.md)에 정리했습니다.**
+> 공통 호출 코드는 [`app/api.js`](app/api.js) — `SERVER_URL` 한 줄만 바꾸면 됩니다.
+
 ### ⚠ 먼저 할 일 — 배포된 코드 교체
 
 현재 그 URL에 올라가 있는 코드는 **`getUmbrella` 하나만 동작하는 초기 버전**입니다.
@@ -68,6 +71,7 @@
 | ⑥⑧ 대여 | `?action=rent&user_id=U001&locker_id=L001&umbrella_id=UB002&plan_id=P001` | `rental_id`, `slot_no`, `expected_return` |
 | ⑨⑩ 반납·결제 | `?action=return&user_id=U001` | `duration_min`, `amount`(초과요금 포함), `payment_id` |
 | 내역 | `?action=history&user_id=U001` | 이용 기록 + 결제 기록 |
+| 요금제 | `?action=plans` | 요금제 목록 (시트 plans 탭) |
 | (기존 앱 호환) | `?action=getUmbrella&umbrella_id=UB001` | 우산 1개 정보 — 예전 응답 모양 유지 |
 
 - 전부 GET/POST 모두 동작 — AI Studio에서 `fetch(URL + "?action=...")` 한 줄이면 됩니다
