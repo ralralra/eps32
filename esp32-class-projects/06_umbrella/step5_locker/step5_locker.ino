@@ -113,37 +113,27 @@ void reportSlots() {
 
 // 열림 → 5초 → 닫힘 (한 사이클) — 각 단계를 시리얼에 찍어 눈으로 확인할 수 있게
 void openCloseCycle(int i) {
-  Serial.printf("  [슬롯 %d] 서보 ▶ 열림 (%d도)\n", i + 1, ANGLE_OPEN);
+  Serial.printf("슬롯%d 열림\n", i + 1);
   servoMove(i, ANGLE_OPEN);
+  delay(OPEN_TIME_MS);
 
-  unsigned long remain = OPEN_TIME_MS;      // 남은 시간을 1초씩 세어 보여줌
-  while (remain >= 1000) {
-    Serial.printf("    %lu초...\n", remain / 1000);
-    delay(1000);
-    remain -= 1000;
-  }
-  if (remain > 0) delay(remain);
-
-  Serial.printf("  [슬롯 %d] 서보 ◀ 닫힘 (%d도)\n", i + 1, ANGLE_CLOSED);
+  Serial.printf("%lu초후 닫힘\n", OPEN_TIME_MS / 1000);
   servoMove(i, ANGLE_CLOSED);
   delay(SETTLE_MS);              // 닫힌 뒤 리드 값이 안정될 때까지
   servoRelease(i);               // 다 움직였으면 힘 빼기 (전류·떨림 감소)
-  Serial.printf("  [슬롯 %d] 잠김 완료 · 지금 우산 %s\n",
-                i + 1, umbrellaPresent(i) ? "있음" : "없음");
 }
 
 // 수동 열기/닫기 — 서보·전원 점검용 (대여/반납 처리 없이 모터만 움직임)
 void doOpen(int slot) {
   int i = slot - 1;
   if (i < 0 || i >= SLOT_COUNT) { Serial.println("슬롯 번호는 1~4 입니다"); return; }
-  Serial.printf("[슬롯 %d] 수동 열림 (%d도) — 닫으려면 c%d 입력\n",
-                slot, ANGLE_OPEN, slot);
+  Serial.printf("슬롯%d 열림 (닫으려면 c%d)\n", slot, slot);
   servoMove(i, ANGLE_OPEN);      // 열어둔 채 유지 (전압 재보기 좋게)
 }
 void doClose(int slot) {
   int i = slot - 1;
   if (i < 0 || i >= SLOT_COUNT) { Serial.println("슬롯 번호는 1~4 입니다"); return; }
-  Serial.printf("[슬롯 %d] 수동 닫힘 (%d도)\n", slot, ANGLE_CLOSED);
+  Serial.printf("슬롯%d 닫힘\n", slot);
   servoMove(i, ANGLE_CLOSED);
   delay(SETTLE_MS);
   servoRelease(i);
@@ -155,20 +145,19 @@ void doRent(int slot) {
   if (i < 0 || i >= SLOT_COUNT) { Serial.println("슬롯 번호는 1~4 입니다"); return; }
 
   if (!umbrellaPresent(i)) {     // 빈 슬롯은 빌려줄 우산이 없음
-    Serial.printf("✗ 슬롯 %d: 우산이 없어서 대여할 수 없어요\n", slot);
+    Serial.printf("슬롯%d 대여불가 — 우산이 없어요\n", slot);
     blinkWarn();
     httpGET("?action=cancel&locker_id=" + String(LOCKER_ID) + "&slot=" + String(slot));   // 시트의 대여 기록 취소
     return;
   }
 
-  Serial.printf("슬롯 %d 열림 — 5초 안에 우산을 꺼내세요!\n", slot);
   openCloseCycle(i);
 
   if (!umbrellaPresent(i)) {
-    Serial.printf("✓ 슬롯 %d 대여완료!\n", slot);
+    Serial.println("대여완료");
     blinkOK();
   } else {
-    Serial.printf("✗ 슬롯 %d 대여실패 — 우산이 그대로 있어요 (대여 취소)\n", slot);
+    Serial.println("대여실패 — 우산이 그대로 있어요");
     blinkWarn();
     httpGET("?action=cancel&locker_id=" + String(LOCKER_ID) + "&slot=" + String(slot));   // DB도 원래대로 되돌리기
   }
@@ -181,19 +170,17 @@ void doReturn(int slot) {
   if (i < 0 || i >= SLOT_COUNT) { Serial.println("슬롯 번호는 1~4 입니다"); return; }
 
   for (int attempt = 1; attempt <= RETURN_RETRY_MAX; attempt++) {
-    Serial.printf("슬롯 %d 열림 — 5초 안에 우산을 꽂으세요! (%d번째)\n", slot, attempt);
     openCloseCycle(i);
 
     if (umbrellaPresent(i)) {
-      Serial.printf("✓ 슬롯 %d 반납완료!\n", slot);
+      Serial.println("반납완료");
       blinkOK();
       reportSlots();
       return;
     }
-    Serial.println("  우산이 감지되지 않아요 — 다시 열게요");
+    Serial.println("우산이 없어요 — 다시 열게요");
   }
-  Serial.printf("✗ 슬롯 %d 반납실패 — %d번 열어도 우산이 감지되지 않았어요\n",
-                slot, RETURN_RETRY_MAX);
+  Serial.printf("반납실패 — %d번 열어도 우산이 없어요\n", RETURN_RETRY_MAX);
   blinkWarn();
   reportSlots();
 }
@@ -229,7 +216,7 @@ void setup() {
   for (int i = 0; i < SLOT_COUNT; i++) {
     pinMode(REED_PIN[i], INPUT_PULLUP);
     servos[i].setPeriodHertz(50);
-    Serial.printf("  [슬롯 %d] 잠금 (%d도)\n", i + 1, ANGLE_CLOSED);
+    Serial.printf("슬롯%d 잠금\n", i + 1);
     servoMove(i, ANGLE_CLOSED);
     delay(400);
     servoRelease(i);
