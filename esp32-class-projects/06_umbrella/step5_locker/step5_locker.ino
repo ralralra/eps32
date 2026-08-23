@@ -49,6 +49,10 @@ const unsigned long OPEN_TIME_MS  = 5000;   // 열려 있는 시간 (5초)
 const unsigned long SETTLE_MS     = 600;    // 서보가 닫힐 때까지 잠깐 대기
 const int RETURN_RETRY_MAX = 3;             // 반납 시 다시 열어주는 최대 횟수
 
+// 평소(대기 중)에 서보의 힘을 빼둘지 — 켜두면 전류를 훨씬 덜 먹고 떨림·발열도 줍니다.
+// 서보가 계속 버티는 힘이 필요하면(문을 손으로 못 열게) false로 바꾸세요.
+const bool RELEASE_WHEN_IDLE = true;
+
 const unsigned long POLL_MS   = 3000;       // 앱 명령 폴링 주기
 const unsigned long REPORT_MS = 30000;      // 슬롯 상태 보고 주기
 
@@ -58,6 +62,15 @@ unsigned long lastPoll = 0, lastReport = 0;
 
 // 리드스위치: 자석 가까이(우산 있음) → LOW
 bool umbrellaPresent(int i) { return digitalRead(REED_PIN[i]) == LOW; }
+
+// 서보는 붙어 있는 동안 계속 힘을 씁니다. 필요할 때만 붙이고 끝나면 떼어내요.
+void servoMove(int i, int angle) {
+  if (!servos[i].attached()) servos[i].attach(SERVO_PIN[i], 500, 2400);
+  servos[i].write(angle);
+}
+void servoRelease(int i) {
+  if (RELEASE_WHEN_IDLE && servos[i].attached()) servos[i].detach();
+}
 
 String httpGET(String query) {
   if (!online) return "";
@@ -99,10 +112,11 @@ void reportSlots() {
 
 // 열림 → 5초 → 닫힘 (한 사이클)
 void openCloseCycle(int i) {
-  servos[i].write(ANGLE_OPEN);
+  servoMove(i, ANGLE_OPEN);
   delay(OPEN_TIME_MS);
-  servos[i].write(ANGLE_CLOSED);
+  servoMove(i, ANGLE_CLOSED);
   delay(SETTLE_MS);              // 닫힌 뒤 리드 값이 안정될 때까지
+  servoRelease(i);               // 다 움직였으면 힘 빼기 (전류·떨림 감소)
 }
 
 // ── 대여 ──────────────────────────────────────────────
@@ -175,11 +189,14 @@ void setup() {
   delay(300);
   pinMode(LED, OUTPUT);
 
+  // 시작할 때 네 칸을 잠그되, 한 개씩 차례로 — 동시에 움직이면 전류가 확 튀어
+  // 약한 전원에서는 보드가 리셋됩니다.
   for (int i = 0; i < SLOT_COUNT; i++) {
     pinMode(REED_PIN[i], INPUT_PULLUP);
     servos[i].setPeriodHertz(50);
-    servos[i].attach(SERVO_PIN[i], 500, 2400);
-    servos[i].write(ANGLE_CLOSED);       // 시작은 모두 잠김
+    servoMove(i, ANGLE_CLOSED);
+    delay(400);
+    servoRelease(i);
   }
 
   Serial.println("\n=== 스마트 우산 보관함 ===");
