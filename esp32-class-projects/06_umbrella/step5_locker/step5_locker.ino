@@ -33,6 +33,10 @@ const char* WIFI_SSID = "WiFi이름";
 const char* WIFI_PASS = "비밀번호";
 const char* URL = "https://script.google.com/macros/s/XXXX/exec";
 
+// 이 보드가 담당하는 보관함 번호 — 시트 lockers 탭의 locker_id와 같아야 해요.
+// 슬롯 번호(1~4)는 보관함마다 겹치기 때문에 이 값으로 구분합니다.
+const char* LOCKER_ID = "L001";
+
 #define LED 2                                    // 내장 LED — 동작 확인용
 
 const int SLOT_COUNT = 4;
@@ -87,7 +91,7 @@ void printStatus() {
 
 // 슬롯별 우산 유무를 시트에 보고 (p1~p4: 1=있음, 0=없음)
 void reportSlots() {
-  String q = "?action=report";
+  String q = "?action=report&locker_id=" + String(LOCKER_ID);
   for (int i = 0; i < SLOT_COUNT; i++)
     q += "&p" + String(i + 1) + "=" + String(umbrellaPresent(i) ? 1 : 0);
   httpGET(q);
@@ -109,7 +113,7 @@ void doRent(int slot) {
   if (!umbrellaPresent(i)) {     // 빈 슬롯은 빌려줄 우산이 없음
     Serial.printf("✗ 슬롯 %d: 우산이 없어서 대여할 수 없어요\n", slot);
     blinkWarn();
-    httpGET("?action=cancel&slot=" + String(slot));   // 시트의 대여 기록 취소
+    httpGET("?action=cancel&locker_id=" + String(LOCKER_ID) + "&slot=" + String(slot));   // 시트의 대여 기록 취소
     return;
   }
 
@@ -122,7 +126,7 @@ void doRent(int slot) {
   } else {
     Serial.printf("✗ 슬롯 %d 대여실패 — 우산이 그대로 있어요 (대여 취소)\n", slot);
     blinkWarn();
-    httpGET("?action=cancel&slot=" + String(slot));   // DB도 원래대로 되돌리기
+    httpGET("?action=cancel&locker_id=" + String(LOCKER_ID) + "&slot=" + String(slot));   // DB도 원래대로 되돌리기
   }
   reportSlots();
 }
@@ -200,6 +204,16 @@ void loop() {
   // ── ① 시리얼 명령 ──
   if (Serial.available()) {
     handleCommand(Serial.readStringUntil('\n'));
+  }
+
+  // ── ①-2 부팅 때 WiFi를 못 잡았어도 나중에 잡히면 자동으로 온라인 전환 ──
+  if (!online && millis() - lastPoll >= POLL_MS) {
+    lastPoll = millis();
+    if (WiFi.status() == WL_CONNECTED) {
+      online = true;
+      Serial.println("WiFi 연결됨 — 앱 명령을 받기 시작합니다");
+      reportSlots();
+    }
   }
 
   // ── ② 앱 명령 폴링 ──
