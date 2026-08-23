@@ -289,13 +289,15 @@ function history(e) {
 // ─────────────────── ESP32 연동 (선택 사항) ───────────────────
 
 function report(e) {             // 슬롯별 우산 유무(p1~p4) → last_check_time 갱신
+  const lockerId = e.parameter.locker_id;      // 없으면 첫 번째로 찾은 우산 (보드 1대 기준)
   const um = sheetTable(TAB.umbrellas);
   const now = new Date();
   let updated = 0;
   for (let slot = 1; slot <= 4; slot++) {
     const p = e.parameter["p" + slot];
     if (p === undefined) continue;
-    const row = um.rows.find(r => parseInt(r.slot_no) === slot);
+    const row = um.rows.find(r => parseInt(r.slot_no) === slot &&
+      (!lockerId || String(r.locker_id) === String(lockerId)));
     if (row) { updateRow(TAB.umbrellas, "umbrella_id", row.umbrella_id,
                          { last_check_time: now }); updated++; }
   }
@@ -305,8 +307,10 @@ function report(e) {             // 슬롯별 우산 유무(p1~p4) → last_chec
 // 대여 취소: ESP32가 "우산이 안 빠졌어요"라고 알릴 때 — DB를 대여 전으로 되돌림
 function cancelRental(e) {
   const slot = parseInt(e.parameter.slot);
+  const lockerId = e.parameter.locker_id;      // 슬롯 번호는 보관함마다 겹치니 함께 비교!
   const rental = sheetTable(TAB.rentals).rows.find(r =>
-    parseInt(r.slot_no) === slot && r.status === "active");
+    parseInt(r.slot_no) === slot && r.status === "active" &&
+    (!lockerId || String(r.locker_id) === String(lockerId)));
   if (!rental) return { ok: false, error: "슬롯 " + slot + "의 대여 중 기록이 없어요" };
 
   const now = new Date();
@@ -320,13 +324,24 @@ function cancelRental(e) {
 }
 
 // ─────────────────── 명령 큐 (ESP32 ↔ 시트) ───────────────────
-function pushCommand(cmd) {
-  ensureSheetTab(TAB.commands).getRange("A1").setValue(cmd);
+// 명령을 한 칸(A1)에 덮어쓰면, 폴링(3초) 사이에 두 명령이 겹칠 때 앞의 명령이
+// 사라져 문이 안 열립니다. 그래서 줄 단위로 쌓고 오래된 것부터 꺼내요(FIFO).
+function commandSheet() {
+  const sh = ensureSheetTab(TAB.commands);
+  if (String(sh.getRange(1, 1).getValue()).trim() !== "command") {
+    sh.clear();                                  // 예전 A1 방식 잔재 정리
+    sh.appendRow(["command", "pushed_at"]);
+  }
+  return sh;
 }
-function popCommand() {          // 읽으면서 비우기 — 명령이 반복 실행되지 않게
-  const cell = ensureSheetTab(TAB.commands).getRange("A1");
-  const cmd = String(cell.getValue() || "");
-  if (cmd) cell.clearContent();
+function pushCommand(cmd) {
+  commandSheet().appendRow([cmd, new Date()]);
+}
+function popCommand() {          // 꺼내면서 지우기 — 같은 명령이 반복 실행되지 않게
+  const sh = commandSheet();
+  if (sh.getLastRow() < 2) return "";            // 헤더만 있으면 대기 명령 없음
+  const cmd = String(sh.getRange(2, 1).getValue() || "");
+  sh.deleteRow(2);
   return cmd;
 }
 function ensureSheetTab(name) {
@@ -353,7 +368,7 @@ function resetDemo() {
   sheetTable(TAB.lockers).rows.forEach(r =>
     updateRow(TAB.lockers, "locker_id", r.locker_id,
               { available_slots: r.total_slots, last_update: new Date() }));
-  ensureSheetTab(TAB.commands).getRange("A1").clearContent();
+  ensureSheetTab(TAB.commands).clear();          // 남은 명령 큐도 비우기
 }
 
 // ─────────────────── 시트 헬퍼 (제목 행 기준) ───────────────────

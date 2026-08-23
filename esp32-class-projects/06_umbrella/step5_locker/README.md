@@ -75,7 +75,8 @@ b1    → 슬롯 1 열림 → 5초 → 닫힘 → 우산 꽂았으면 "반납완
 ```
 
 ### ④ 앱 연결
-[`step5_locker.ino`](step5_locker.ino)에서 WiFi 이름·비번과 **/exec URL** 수정 후 업로드.
+[`step5_locker.ino`](step5_locker.ino)에서 WiFi 이름·비번, **/exec URL**, 그리고
+**`LOCKER_ID`**(이 보드가 담당할 보관함 — 시트 lockers 탭의 값, 기본 `L001`)를 확인 후 업로드.
 라이브러리: **ESP32Servo** (기본 Servo.h는 ESP32에서 안 됩니다!)
 
 ## 앱 연동 (화면별 코드)
@@ -96,9 +97,9 @@ AI Studio 지시문 → 처음부터 만들 때 **[`app/build_prompt.md`](app/bu
 | `?action=history&user_id=U001` | 앱 | 이용·결제 내역 |
 | `?action=status&locker_id=L001` | 앱 | 우산 현황 JSON |
 | `?action=cmd` | ESP32 | 명령 읽기 (읽으면 큐가 비워짐) |
-| `?action=report&p1=1&p2=0…` | ESP32 | 슬롯별 우산 유무 보고 → last_check_time 갱신 |
+| `?action=report&locker_id=L001&p1=1&p2=0…` | ESP32 | 슬롯별 우산 유무 보고 → last_check_time 갱신 |
 | `?action=plans` | 앱 | 요금제 목록 (시트 plans 탭) |
-| `?action=cancel&slot=2` | ESP32 | **대여실패 롤백** — 우산이 안 빠졌을 때 rentals·umbrellas·lockers 원상복구 |
+| `?action=cancel&locker_id=L001&slot=2` | ESP32 | **대여실패 롤백** — 우산이 안 빠졌을 때 rentals·umbrellas·lockers 원상복구 |
 
 - 요금제: `&plan_id=P002` 추가 가능 (기본 P001=24시간)
 - **정합성 규칙**: rentals·umbrellas·lockers는 항상 스크립트가 한 번에 갱신합니다.
