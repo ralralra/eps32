@@ -22,6 +22,7 @@
 각도(20/100), 열림 시간(5초), 반복 횟수(3회)는 코드 위쪽 상수만 바꾸면 됩니다.
 
 전체 실행 로직 순서도 → **[`flowchart.md`](flowchart.md)**
+박람회 출품 기준 현실성 점검·대체안 → **[`EXPO_PLAN.md`](EXPO_PLAN.md)**
 
 ## 명령 넣는 두 가지 방법
 
@@ -81,9 +82,13 @@ b1    → 슬롯 1 열림 → 5초 → 닫힘 → 우산 꽂았으면 "반납완
 
 | 요청 | 누가 | 하는 일 |
 |---|---|---|
-| `?action=rent&user_id=U001` | 앱 | 빈 우산 배정 → rentals 추가 + umbrellas·lockers 갱신 + `RENT:슬롯` 명령 |
-| `?action=return&user_id=U001` | 앱 | 반납 처리 (이용 시간 계산) + `RETURN:슬롯` 명령 |
-| `?action=status` | 앱 | 우산 현황 JSON |
+| `?action=register&name=..&phone=..` | 앱 | 회원 등록 (같은 번호면 기존 user_id 반환) |
+| `?action=register_account&user_id=..&account=..` | 앱 | 결제 계좌 등록 (마스킹 저장) |
+| `?action=lockers` | 앱 | 보관함 목록 |
+| `?action=rent&user_id=U001&locker_id=L001&umbrella_id=UB002` | 앱 | 지정 우산 대여 → rentals 추가 + umbrellas·lockers 갱신 + `RENT:슬롯` 명령 |
+| `?action=return&user_id=U001` | 앱 | 반납 + **후불 정산** (이용시간·초과요금 계산 → payments 기록) + `RETURN:슬롯` |
+| `?action=history&user_id=U001` | 앱 | 이용·결제 내역 |
+| `?action=status&locker_id=L001` | 앱 | 우산 현황 JSON |
 | `?action=cmd` | ESP32 | 명령 읽기 (읽으면 큐가 비워짐) |
 | `?action=report&p1=1&p2=0…` | ESP32 | 슬롯별 우산 유무 보고 → last_check_time 갱신 |
 | `?action=cancel&slot=2` | ESP32 | **대여실패 롤백** — 우산이 안 빠졌을 때 rentals·umbrellas·lockers 원상복구 |
