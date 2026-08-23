@@ -33,8 +33,31 @@
 ## 앱(AI Studio) ↔ 백엔드 연결 규격
 
 앱은 아래 주소만 호출하면 됩니다. **서버 주소는 구글 시트 `시트1` 탭의 `/exec` URL**입니다.
-(⚠ 그 URL에 배포된 코드가 이 `umbrella_locker.gs`가 아니면, 스크립트 편집기에서 이 코드로
-교체하고 **배포 관리 → 연필 → 새 버전**으로 갱신하세요. 그래야 URL이 유지됩니다.)
+
+### ⚠ 먼저 할 일 — 배포된 코드 교체
+
+현재 그 URL에 올라가 있는 코드는 **`getUmbrella` 하나만 동작하는 초기 버전**입니다.
+(직접 호출해 확인: 다른 action은 전부 `{"success":false,"message":"올바른 action이 없습니다."}`)
+즉 **지금은 앱에서 대여·반납·결제를 눌러도 서버가 처리하지 못합니다.**
+
+거기에 더해 그 코드는 umbrellas 탭의 열을 한 칸씩 밀려 읽습니다:
+
+| 응답 키 | 실제로 담긴 값 |
+|---|---|
+| `status` | 슬롯 번호 (1, 2, 3…) ← 상태가 아님! |
+| `location` | 대여 상태 (available/rented) ← 위치가 아님! |
+
+**교체 방법** (URL이 그대로 유지되는 방식):
+1. 시트 → `확장 프로그램 → Apps Script`
+2. 기존 코드를 전부 지우고 [`umbrella_locker.gs`](apps_script/umbrella_locker.gs) 붙여넣기
+3. **배포 → 배포 관리 → (연필 아이콘) → 버전: 새 버전 → 배포**
+   ※ "새 배포"를 누르면 URL이 바뀌어 앱 설정을 다시 해야 하니 주의!
+
+**앱을 안 고쳐도 됩니다.** 새 코드는 기존 앱 호환을 위해
+`getUmbrella`를 같은 응답 모양(`success`, `locker`, `status`, `location`)으로 그대로 유지하고,
+뜻이 분명한 키(`slot_no`, `umbrella_status`, `locker_id`)를 **추가로** 넣어줍니다.
+모든 응답에 `success`/`message`도 함께 담기므로 기존 앱 코드가 깨지지 않습니다.
+앱을 손볼 때 새 키로 갈아타면 됩니다.
 
 | 앱 화면 | 호출 | 돌아오는 값 |
 |---|---|---|
@@ -45,6 +68,7 @@
 | ⑥⑧ 대여 | `?action=rent&user_id=U001&locker_id=L001&umbrella_id=UB002&plan_id=P001` | `rental_id`, `slot_no`, `expected_return` |
 | ⑨⑩ 반납·결제 | `?action=return&user_id=U001` | `duration_min`, `amount`(초과요금 포함), `payment_id` |
 | 내역 | `?action=history&user_id=U001` | 이용 기록 + 결제 기록 |
+| (기존 앱 호환) | `?action=getUmbrella&umbrella_id=UB001` | 우산 1개 정보 — 예전 응답 모양 유지 |
 
 - 전부 GET/POST 모두 동작 — AI Studio에서 `fetch(URL + "?action=...")` 한 줄이면 됩니다
 - 요금 계산: **요금제 가격 + (초과 시간 ÷ 24시간, 올림) × extra_24h_price**
