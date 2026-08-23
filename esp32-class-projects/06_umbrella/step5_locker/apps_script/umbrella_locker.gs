@@ -1,20 +1,28 @@
 /*
-  우산 대여 시스템 — Apps Script (구글 시트 = DB)
-  ------------------------------------------------
-  시트 탭: users / lockers / umbrellas / rentals / plans
+  SMART UMBRELLA — Apps Script 백엔드 (구글 시트 = DB, 후불제 시간제 대여)
+  ----------------------------------------------------------------------
+  동아리 박람회 데모 기준: 결제는 "가상 결제"(실제 출금 없이 payments 기록 생성),
+  지도는 앱의 정적 이미지, QR은 보관함에 인쇄해 붙인 locker_id QR을 사용합니다.
+
+  시트 탭: users / lockers / umbrellas / rentals / payments / plans
            (commands 탭은 없으면 자동 생성 — ESP32 명령 큐)
 
   배포: 확장 프로그램 → Apps Script → 배포 → 새 배포 → 웹 앱
-        "액세스 권한: 모든 사용자" → /exec URL을 웹앱과 ESP32에 넣기
+        "액세스 권한: 모든 사용자" → /exec URL을 앱과 ESP32에 넣기
+  ※ 이미 배포한 적이 있으면 "배포 관리 → 연필 → 새 버전"으로 갱신하면 URL이 유지됩니다.
 
-  브라우저 테스트:
-    URL?action=rent&user_id=U001            → 대여 (슬롯 열림 명령까지)
-    URL?action=return&user_id=U001          → 반납
-    URL?action=status                       → 우산 현황 JSON
-    URL?action=cmd                          → ESP32용 명령 읽기(읽으면 비워짐)
+  브라우저 테스트 (전부 GET):
+    URL?action=register&name=홍길동&phone=010-1234-5678   → 회원 등록(중복 전화면 기존 ID)
+    URL?action=register_account&user_id=U001&account=123-456-789012
+    URL?action=lockers                                    → 보관함 목록
+    URL?action=status&locker_id=L001                      → 그 보관함 우산 현황
+    URL?action=rent&user_id=U001&locker_id=L001&umbrella_id=UB002&plan_id=P001
+    URL?action=return&user_id=U001                        → 반납 + 후불 정산(가상 결제)
+    URL?action=history&user_id=U001                       → 이용·결제 내역
+    URL?action=cmd                                        → ESP32용 (읽으면 비워짐)
 
-  ★ 대여 한 건 = rentals 추가 + umbrellas 갱신 + lockers 슬롯 수 갱신을
-    이 스크립트가 "한 번에" 처리 — 시트를 손으로 고치면 정합성이 깨져요!
+  ★ 대여/반납/정산은 rentals·umbrellas·lockers·payments를 이 스크립트가
+    "한 번에" 갱신합니다. 시트를 손으로 고치면 정합성이 깨져요!
 */
 
 const TAB = {                    // ★ 실제 시트 탭 이름과 다르면 여기만 고치세요
@@ -22,24 +30,34 @@ const TAB = {                    // ★ 실제 시트 탭 이름과 다르면 �
   lockers:   "lockers",
   umbrellas: "umbrellas",
   rentals:   "rentals",
+  payments:  "payments",
   plans:     "plans",
   commands:  "commands"
 };
 const DEFAULT_PLAN = "P001";     // 요금제 미지정 시 24시간권
+const DEFAULT_EXTRA_24H = 1000;  // plans에서 못 찾을 때 초과 24시간당 요금
 
 // ───────────────────────── 진입점 ─────────────────────────
-function doGet(e) {
+function doGet(e)  { return route(e); }
+function doPost(e) { return route(e); }   // 앱이 POST로 보내도 동일하게 동작
+
+function route(e) {
   const a = (e.parameter.action || "").toLowerCase();
   const lock = LockService.getScriptLock();   // 동시 요청 충돌 방지
   lock.waitLock(5000);
   try {
-    if (a === "rent")   return json(rent(e));
-    if (a === "return") return json(returnUmbrella(e));
-    if (a === "status") return json(status());
-    if (a === "cmd")    return text(popCommand());
-    if (a === "report") return json(report(e));
-    if (a === "cancel") return json(cancelRental(e));
-    return json({ ok: false, error: "action을 지정하세요 (rent/return/status/cmd/report/cancel)" });
+    if (a === "register")         return json(register(e));
+    if (a === "register_account") return json(registerAccount(e));
+    if (a === "lockers")          return json(lockerList());
+    if (a === "status")           return json(status(e));
+    if (a === "rent")             return json(rent(e));
+    if (a === "return")           return json(returnUmbrella(e));
+    if (a === "history")          return json(history(e));
+    if (a === "cmd")              return text(popCommand());
+    if (a === "report")           return json(report(e));
+    if (a === "cancel")           return json(cancelRental(e));
+    return json({ ok: false, error:
+      "action을 지정하세요 (register/register_account/lockers/status/rent/return/history/cmd/report/cancel)" });
   } catch (err) {
     return json({ ok: false, error: String(err) });
   } finally {
@@ -47,9 +65,71 @@ function doGet(e) {
   }
 }
 
-// ───────────────────────── 액션 ─────────────────────────
+// ─────────────────── 회원 (앱 화면 ②·⑦) ───────────────────
 
-// 대여: 빈 우산 배정 → rentals 추가 + umbrellas·lockers 갱신 + 슬롯 열림 명령
+// 회원 등록: 같은 전화번호가 있으면 기존 user_id 반환 (최초 1회 입력 UX)
+function register(e) {
+  const name  = e.parameter.name;
+  const phone = e.parameter.phone;
+  if (!name || !phone) return { ok: false, error: "name과 phone이 필요해요" };
+
+  const existing = findRow(TAB.users, "phone", phone);
+  if (existing) return { ok: true, user_id: existing.user_id,
+                         name: existing.name, existing: true };
+
+  const userId = nextId(TAB.users, "user_id", "U");
+  appendByHeader(TAB.users, {
+    user_id: userId, name: name, phone: phone,
+    email: e.parameter.email || "",
+    created_at: new Date(), status: "active"
+  });
+  return { ok: true, user_id: userId, name: name, existing: false };
+}
+
+// 결제 수단(계좌) 등록 — 가상 결제용: 마스킹해서 users 탭에 저장 (최초 1회)
+function registerAccount(e) {
+  const userId  = e.parameter.user_id;
+  const account = e.parameter.account;
+  if (!userId || !account) return { ok: false, error: "user_id와 account가 필요해요" };
+  if (!findRow(TAB.users, "user_id", userId))
+    return { ok: false, error: "등록되지 않은 사용자: " + userId };
+
+  ensureColumn(TAB.users, "account_masked");
+  const masked = maskAccount(account);
+  updateRow(TAB.users, "user_id", userId, { account_masked: masked });
+  return { ok: true, user_id: userId, account_masked: masked };
+}
+
+function maskAccount(acc) {       // 123-456-789012 → 123-***-9012 (원본은 저장 안 함!)
+  const digits = String(acc).replace(/[^0-9]/g, "");
+  if (digits.length < 7) return "***";
+  return digits.slice(0, 3) + "-***-" + digits.slice(-4);
+}
+
+// ─────────────────── 조회 (앱 화면 ③·⑤) ───────────────────
+
+function lockerList() {
+  return { ok: true, lockers: sheetTable(TAB.lockers).rows.map(r => ({
+    locker_id: r.locker_id, locker_name: r.locker_name, location: r.location,
+    total_slots: r.total_slots, available_slots: r.available_slots, status: r.status
+  })) };
+}
+
+// 우산 현황 — locker_id를 주면 그 보관함만
+function status(e) {
+  const lockerId = e.parameter.locker_id;
+  let rows = sheetTable(TAB.umbrellas).rows
+    .filter(r => !isNaN(parseInt(r.slot_no)));            // 형식 안 맞는 행 제외
+  if (lockerId) rows = rows.filter(r => String(r.locker_id) === String(lockerId));
+  return { ok: true, umbrellas: rows.map(r => ({
+    umbrella_id: r.umbrella_id, locker_id: r.locker_id,
+    slot_no: r.slot_no, status: r.status
+  })) };
+}
+
+// ─────────────────── 대여 (앱 화면 ④⑤⑥⑧) ───────────────────
+// QR로 인식한 locker_id + 사용자가 고른 umbrella_id로 대여
+// (umbrella_id 생략 시 그 보관함의 첫 available 우산 자동 배정)
 function rent(e) {
   const userId = e.parameter.user_id;
   if (!userId) return { ok: false, error: "user_id가 필요해요" };
@@ -58,46 +138,49 @@ function rent(e) {
   if (findActiveRental(userId))
     return { ok: false, error: "이미 대여 중이에요 — 먼저 반납하세요" };
 
-  // 사용 가능한 우산 찾기 (슬롯 번호가 숫자인 정상 행만)
-  const um = sheetTable(TAB.umbrellas);
-  const target = um.rows.find(r =>
-    r.status === "available" && !isNaN(parseInt(r.slot_no)));
-  if (!target) return { ok: false, error: "지금은 빌릴 수 있는 우산이 없어요" };
+  const lockerId   = e.parameter.locker_id;
+  const umbrellaId = e.parameter.umbrella_id;
+  const candidates = sheetTable(TAB.umbrellas).rows.filter(r =>
+    r.status === "available" && !isNaN(parseInt(r.slot_no)) &&
+    (!lockerId   || String(r.locker_id)   === String(lockerId)) &&
+    (!umbrellaId || String(r.umbrella_id) === String(umbrellaId)));
 
-  const plan = findRow(TAB.plans, "plan_id", e.parameter.plan_id || DEFAULT_PLAN);
+  if (!candidates.length) {
+    if (umbrellaId) return { ok: false, error: umbrellaId + "는 지금 대여할 수 없어요" };
+    return { ok: false, error: "이 보관함에는 빌릴 수 있는 우산이 없어요" };
+  }
+  const target = candidates[0];
+
+  const plan  = findRow(TAB.plans, "plan_id", e.parameter.plan_id || DEFAULT_PLAN);
   const hours = plan ? Number(plan.hours) : 24;
-  const price = plan ? Number(plan.price) : 0;
+  const price = plan ? Number(plan.price) : 2000;
 
   const now = new Date();
   const expected = new Date(now.getTime() + hours * 3600 * 1000);
   const rentalId = nextId(TAB.rentals, "rental_id", "R");
 
-  // ① rentals 한 줄 추가
-  appendByHeader(TAB.rentals, {
+  appendByHeader(TAB.rentals, {                  // ① 대여 기록 (후불이라 pending)
     rental_id: rentalId, user_id: userId,
     umbrella_id: target.umbrella_id, locker_id: target.locker_id,
     slot_no: target.slot_no, plan_hours: hours, plan_price: price,
     rental_time: now, expected_return: expected,
     status: "active", payment_status: "pending"
   });
-
-  // ② umbrellas 갱신
-  updateRow(TAB.umbrellas, "umbrella_id", target.umbrella_id, {
+  updateRow(TAB.umbrellas, "umbrella_id", target.umbrella_id, {   // ② 우산 상태
     status: "rented", last_user_id: userId, last_check_time: now,
     total_rentals: Number(target.total_rentals || 0) + 1
   });
-
-  // ③ lockers 빈 슬롯 수 갱신
-  bumpAvailableSlots(target.locker_id, -1);
-
-  // ④ ESP32에 "슬롯 열어" 명령
-  pushCommand("RENT:" + target.slot_no);
+  bumpAvailableSlots(target.locker_id, -1);      // ③ 보관함 빈 슬롯
+  pushCommand("RENT:" + target.slot_no);         // ④ ESP32 슬롯 열림 (보드 없으면 무시됨)
 
   return { ok: true, rental_id: rentalId, umbrella_id: target.umbrella_id,
-           slot_no: Number(target.slot_no), expected_return: expected };
+           locker_id: target.locker_id, slot_no: Number(target.slot_no),
+           plan_hours: hours, plan_price: price, expected_return: expected };
 }
 
-// 반납: 내 active 대여 찾기 → 원래 슬롯 열림 → rentals·umbrellas·lockers 갱신
+// ─────────────── 반납 + 후불 정산 (앱 화면 ⑨⑩) ───────────────
+// 실제 이용시간 계산 → 요금 = 요금제 가격 + 초과 24시간당 extra_24h_price
+// → payments에 가상 결제 기록(paid) 생성 → rentals.payment_status=paid
 function returnUmbrella(e) {
   const userId = e.parameter.user_id;
   if (!userId) return { ok: false, error: "user_id가 필요해요" };
@@ -106,48 +189,72 @@ function returnUmbrella(e) {
   if (!rental) return { ok: false, error: "대여 중인 우산이 없어요" };
 
   const now = new Date();
-  const durationMin = Math.round((now - new Date(rental.rental_time)) / 60000);
+  const rentedAt = rental.rental_time ? new Date(rental.rental_time) : now;
+  const durationMin = Math.max(0, Math.round((now - rentedAt) / 60000));
 
+  // ── 요금 계산 (후불) ──
+  const planHours = Number(rental.plan_hours) || 24;
+  const planPrice = Number(rental.plan_price) || 2000;
+  const plan = sheetTable(TAB.plans).rows.find(r => Number(r.hours) === planHours);
+  const extra24h = plan ? Number(plan.extra_24h_price) || DEFAULT_EXTRA_24H
+                        : DEFAULT_EXTRA_24H;
+  const overMin = Math.max(0, durationMin - planHours * 60);
+  const extraBlocks = Math.ceil(overMin / (24 * 60));     // 초과분은 24시간 단위 올림
+  const amount = planPrice + extraBlocks * extra24h;
+
+  // ── ① 대여 종료 ──
   updateRow(TAB.rentals, "rental_id", rental.rental_id, {
-    return_time: now, duration_min: durationMin, status: "returned"
+    return_time: now, duration_min: durationMin,
+    status: "returned", payment_status: "paid"
   });
+  // ── ② 우산·보관함 복구 ──
   updateRow(TAB.umbrellas, "umbrella_id", rental.umbrella_id, {
     status: "available", last_check_time: now
   });
   bumpAvailableSlots(rental.locker_id, +1);
+  // ── ③ 가상 결제 기록 ──
+  const user = findRow(TAB.users, "user_id", userId);
+  const paymentId = nextId(TAB.payments, "payment_id", "P");
+  appendByHeader(TAB.payments, {
+    payment_id: paymentId, rental_id: rental.rental_id, user_id: userId,
+    amount: amount, method: "계좌 자동출금(가상)",
+    account_masked: (user && user.account_masked) || "미등록",
+    payment_time: now, status: "paid"
+  });
+  // ── ④ ESP32 슬롯 열림 ──
   pushCommand("RETURN:" + rental.slot_no);
 
-  return { ok: true, rental_id: rental.rental_id,
-           slot_no: Number(rental.slot_no), duration_min: durationMin };
+  return { ok: true, rental_id: rental.rental_id, slot_no: Number(rental.slot_no),
+           duration_min: durationMin, plan_price: planPrice,
+           extra_charge: extraBlocks * extra24h, amount: amount,
+           payment_id: paymentId,
+           account_masked: (user && user.account_masked) || "미등록" };
 }
 
-// 현황: 웹앱이 화면에 뿌릴 우산 목록
-function status() {
-  const um = sheetTable(TAB.umbrellas);
-  return { ok: true, umbrellas: um.rows.map(r => ({
-    umbrella_id: r.umbrella_id, locker_id: r.locker_id,
-    slot_no: r.slot_no, status: r.status, last_user_id: r.last_user_id
-  })) };
+// 내역 확인 (앱 화면 ⑩ '내역') — 이용 기록 + 결제 기록
+function history(e) {
+  const userId = e.parameter.user_id;
+  if (!userId) return { ok: false, error: "user_id가 필요해요" };
+  const rentals = sheetTable(TAB.rentals).rows
+    .filter(r => String(r.user_id) === String(userId))
+    .map(r => ({ rental_id: r.rental_id, umbrella_id: r.umbrella_id,
+                 locker_id: r.locker_id, rental_time: r.rental_time,
+                 return_time: r.return_time, duration_min: r.duration_min,
+                 status: r.status, payment_status: r.payment_status }))
+    .reverse();                                  // 최신이 위로
+  const payments = sheetTable(TAB.payments).rows
+    .filter(r => String(r.user_id) === String(userId))
+    .map(r => ({ payment_id: r.payment_id, rental_id: r.rental_id,
+                 amount: r.amount, method: r.method,
+                 account_masked: r.account_masked,
+                 payment_time: r.payment_time, status: r.status }))
+    .reverse();
+  return { ok: true, rentals: rentals, payments: payments };
 }
 
-// 대여 취소: ESP32가 "우산이 안 빠졌어요"라고 알릴 때 — DB를 대여 전으로 되돌림
-function cancelRental(e) {
-  const slot = parseInt(e.parameter.slot);
-  const rental = sheetTable(TAB.rentals).rows.find(r =>
-    parseInt(r.slot_no) === slot && r.status === "active");
-  if (!rental) return { ok: false, error: "슬롯 " + slot + "의 대여 중 기록이 없어요" };
+// ─────────────────── ESP32 연동 (선택 사항) ───────────────────
 
-  const now = new Date();
-  updateRow(TAB.rentals, "rental_id", rental.rental_id,
-            { status: "canceled", return_time: now, duration_min: 0 });
-  updateRow(TAB.umbrellas, "umbrella_id", rental.umbrella_id,
-            { status: "available", last_check_time: now });
-  bumpAvailableSlots(rental.locker_id, +1);
-  return { ok: true, rental_id: rental.rental_id, canceled: true };
-}
-
-// ESP32 보고: 슬롯별 우산 유무(p1~p4) → last_check_time 갱신
-function report(e) {
+function report(e) {             // 슬롯별 우산 유무(p1~p4) → last_check_time 갱신
   const um = sheetTable(TAB.umbrellas);
   const now = new Date();
   let updated = 0;
@@ -161,19 +268,58 @@ function report(e) {
   return { ok: true, updated: updated };
 }
 
+// 대여 취소: ESP32가 "우산이 안 빠졌어요"라고 알릴 때 — DB를 대여 전으로 되돌림
+function cancelRental(e) {
+  const slot = parseInt(e.parameter.slot);
+  const rental = sheetTable(TAB.rentals).rows.find(r =>
+    parseInt(r.slot_no) === slot && r.status === "active");
+  if (!rental) return { ok: false, error: "슬롯 " + slot + "의 대여 중 기록이 없어요" };
+
+  const now = new Date();
+  updateRow(TAB.rentals, "rental_id", rental.rental_id,
+            { status: "canceled", return_time: now, duration_min: 0,
+              payment_status: "canceled" });
+  updateRow(TAB.umbrellas, "umbrella_id", rental.umbrella_id,
+            { status: "available", last_check_time: now });
+  bumpAvailableSlots(rental.locker_id, +1);
+  return { ok: true, rental_id: rental.rental_id, canceled: true };
+}
+
 // ─────────────────── 명령 큐 (ESP32 ↔ 시트) ───────────────────
 function pushCommand(cmd) {
-  ensureCommandsSheet().getRange("A1").setValue(cmd);
+  ensureSheetTab(TAB.commands).getRange("A1").setValue(cmd);
 }
 function popCommand() {          // 읽으면서 비우기 — 명령이 반복 실행되지 않게
-  const cell = ensureCommandsSheet().getRange("A1");
+  const cell = ensureSheetTab(TAB.commands).getRange("A1");
   const cmd = String(cell.getValue() || "");
   if (cmd) cell.clearContent();
   return cmd;
 }
-function ensureCommandsSheet() {
+function ensureSheetTab(name) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  return ss.getSheetByName(TAB.commands) || ss.insertSheet(TAB.commands);
+  return ss.getSheetByName(name) || ss.insertSheet(name);
+}
+
+// ─────────── 박람회용: 데모 초기화 (스크립트 편집기에서 직접 실행) ───────────
+// rentals·payments를 비우고 모든 우산을 available로 되돌립니다. 부스 리셋용!
+function resetDemo() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  [TAB.rentals, TAB.payments].forEach(name => {
+    const sh = ss.getSheetByName(name);
+    if (sh && sh.getLastRow() > 1)
+      sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).clearContent();
+  });
+  const um = sheetTable(TAB.umbrellas);
+  um.rows.forEach(r => {
+    if (!isNaN(parseInt(r.slot_no)))
+      updateRow(TAB.umbrellas, "umbrella_id", r.umbrella_id,
+                { status: "available", last_user_id: "" });
+  });
+  // 보관함 빈 슬롯 수를 전체 슬롯 수로 복구
+  sheetTable(TAB.lockers).rows.forEach(r =>
+    updateRow(TAB.lockers, "locker_id", r.locker_id,
+              { available_slots: r.total_slots, last_update: new Date() }));
+  ensureSheetTab(TAB.commands).getRange("A1").clearContent();
 }
 
 // ─────────────────── 시트 헬퍼 (제목 행 기준) ───────────────────
@@ -215,6 +361,13 @@ function updateRow(name, key, value, changes) {
 function appendByHeader(name, obj) {
   const t = sheetTable(name);
   t.sheet.appendRow(t.headers.map(h => (h in obj) ? obj[h] : ""));
+}
+
+// 제목 행에 열이 없으면 맨 오른쪽에 추가 (예: users의 account_masked)
+function ensureColumn(name, colName) {
+  const t = sheetTable(name);
+  if (t.headers.indexOf(colName) >= 0) return;
+  t.sheet.getRange(1, t.headers.length + 1).setValue(colName);
 }
 
 function bumpAvailableSlots(lockerId, delta) {
