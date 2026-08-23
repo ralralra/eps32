@@ -56,6 +56,7 @@ function route(e) {
     if (a === "cmd")              return text(popCommand());
     if (a === "report")           return json(report(e));
     if (a === "cancel")           return json(cancelRental(e));
+    if (a === "getumbrella")      return json(getUmbrella(e));   // 기존 앱 호환
     return json({ ok: false, error:
       "action을 지정하세요 (register/register_account/lockers/status/rent/return/history/cmd/report/cancel)" });
   } catch (err) {
@@ -125,6 +126,27 @@ function status(e) {
     umbrella_id: r.umbrella_id, locker_id: r.locker_id,
     slot_no: r.slot_no, status: r.status
   })) };
+}
+
+// 기존 앱 호환용 — 이전 백엔드의 getUmbrella와 같은 모양으로 응답합니다.
+//   ⚠ 이전 백엔드는 열을 한 칸씩 밀려 읽어서 status에 슬롯번호가, location에
+//     상태값이 들어갔어요. 앱이 그 모양을 그대로 쓰고 있을 수 있으니 legacy 키는
+//     건드리지 않고, 뜻이 분명한 키(slot_no·umbrella_status)를 함께 넣어줍니다.
+//     앱을 고칠 때 새 키로 갈아타면 됩니다.
+function getUmbrella(e) {
+  const id = e.parameter.umbrella_id || e.parameter.umbrellaId;
+  if (!id) return { ok: false, error: "우산 번호가 없습니다." };
+  const row = findRow(TAB.umbrellas, "umbrella_id", id);
+  if (!row) return { ok: false, error: "등록되지 않은 우산입니다." };
+  return { ok: true, umbrella: {
+    umbrella_id: row.umbrella_id,
+    locker:   row.locker_id,        // legacy
+    status:   row.slot_no,          // legacy (실제로는 슬롯 번호!)
+    location: row.status,           // legacy (실제로는 대여 상태!)
+    locker_id: row.locker_id,       // 뜻이 분명한 새 키 ↓
+    slot_no: row.slot_no,
+    umbrella_status: row.status
+  } };
 }
 
 // ─────────────────── 대여 (앱 화면 ④⑤⑥⑧) ───────────────────
@@ -390,6 +412,11 @@ function nextId(name, key, prefix) {          // R001 → R002 …
 
 // ─────────────────── 응답 헬퍼 ───────────────────
 function json(obj) {
+  // 기존 앱이 success/message를 보고 있어도 동작하도록 같은 뜻의 키를 함께 넣어줍니다.
+  if (obj && typeof obj === "object") {
+    if ("ok" in obj && !("success" in obj)) obj.success = obj.ok;
+    if ("error" in obj && !("message" in obj)) obj.message = obj.error;
+  }
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
 }
