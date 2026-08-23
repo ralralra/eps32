@@ -82,6 +82,7 @@ b1    → 슬롯 1 열림 → 5초 → 닫힘 → 우산 꽂았으면 "반납완
 
 기획안 10개 화면에서 무엇을 호출하고 무엇이 돌아오는지 → **[`app/screens.md`](app/screens.md)**
 공통 호출 코드는 [`app/api.js`](app/api.js) (`SERVER_URL` 한 줄만 수정).
+AI Studio로 만든 앱을 연결할 때 붙여넣을 지시문 → **[`app/ai_studio_prompt.md`](app/ai_studio_prompt.md)**
 
 ## API 정리 (Apps Script)
 
