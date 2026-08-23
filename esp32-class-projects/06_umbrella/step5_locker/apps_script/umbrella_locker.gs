@@ -49,6 +49,7 @@ function route(e) {
     if (a === "register")         return json(register(e));
     if (a === "register_account") return json(registerAccount(e));
     if (a === "lockers")          return json(lockerList());
+    if (a === "plans")            return json(planList());
     if (a === "status")           return json(status(e));
     if (a === "rent")             return json(rent(e));
     if (a === "return")           return json(returnUmbrella(e));
@@ -58,7 +59,7 @@ function route(e) {
     if (a === "cancel")           return json(cancelRental(e));
     if (a === "getumbrella")      return json(getUmbrella(e));   // 기존 앱 호환
     return json({ ok: false, error:
-      "action을 지정하세요 (register/register_account/lockers/status/rent/return/history/cmd/report/cancel)" });
+      "action을 지정하세요 (register/register_account/lockers/plans/status/rent/return/history/cmd/report/cancel)" });
   } catch (err) {
     return json({ ok: false, error: String(err) });
   } finally {
@@ -108,6 +109,17 @@ function maskAccount(acc) {       // 123-456-789012 → 123-***-9012 (원본은 
 }
 
 // ─────────────────── 조회 (앱 화면 ③·⑤) ───────────────────
+
+// 요금제 목록 (앱 화면 ⑥) — active인 것만
+function planList() {
+  return { ok: true, plans: sheetTable(TAB.plans).rows
+    .filter(r => String(r.status).trim() === "active")
+    .map(r => ({
+      plan_id: r.plan_id, plan_name: r.plan_name,
+      hours: Number(r.hours), price: Number(r.price),
+      extra_24h_price: Number(r.extra_24h_price)
+    })) };
+}
 
 function lockerList() {
   return { ok: true, lockers: sheetTable(TAB.lockers).rows.map(r => ({

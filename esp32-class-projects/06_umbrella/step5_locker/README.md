@@ -55,7 +55,7 @@ DB 시트에 아래 탭과 제목 행이 있어야 합니다 (열 **순서**는 
 | lockers | locker_id, total_slots, available_slots, last_update |
 | umbrellas | umbrella_id, locker_id, slot_no, status, last_check_time, total_rentals, last_user_id |
 | rentals | rental_id, user_id, umbrella_id, locker_id, slot_no, plan_hours, plan_price, rental_time, expected_return, return_time, duration_min, status, payment_status |
-| plans | plan_id, plan_name, hours, price, status |
+| plans | plan_id, plan_name, hours, price, extra_24h_price, status |
 
 - `commands` 탭은 **자동 생성**됩니다 (ESP32 명령 큐 — A1 셀)
 - umbrellas의 status는 `available` / `rented` **영어로 통일**하세요
@@ -78,6 +78,11 @@ b1    → 슬롯 1 열림 → 5초 → 닫힘 → 우산 꽂았으면 "반납완
 [`step5_locker.ino`](step5_locker.ino)에서 WiFi 이름·비번과 **/exec URL** 수정 후 업로드.
 라이브러리: **ESP32Servo** (기본 Servo.h는 ESP32에서 안 됩니다!)
 
+## 앱 연동 (화면별 코드)
+
+기획안 10개 화면에서 무엇을 호출하고 무엇이 돌아오는지 → **[`app/screens.md`](app/screens.md)**
+공통 호출 코드는 [`app/api.js`](app/api.js) (`SERVER_URL` 한 줄만 수정).
+
 ## API 정리 (Apps Script)
 
 | 요청 | 누가 | 하는 일 |
@@ -91,6 +96,7 @@ b1    → 슬롯 1 열림 → 5초 → 닫힘 → 우산 꽂았으면 "반납완
 | `?action=status&locker_id=L001` | 앱 | 우산 현황 JSON |
 | `?action=cmd` | ESP32 | 명령 읽기 (읽으면 큐가 비워짐) |
 | `?action=report&p1=1&p2=0…` | ESP32 | 슬롯별 우산 유무 보고 → last_check_time 갱신 |
+| `?action=plans` | 앱 | 요금제 목록 (시트 plans 탭) |
 | `?action=cancel&slot=2` | ESP32 | **대여실패 롤백** — 우산이 안 빠졌을 때 rentals·umbrellas·lockers 원상복구 |
 
 - 요금제: `&plan_id=P002` 추가 가능 (기본 P001=24시간)
