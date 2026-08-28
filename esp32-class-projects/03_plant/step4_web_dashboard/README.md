@@ -4,7 +4,7 @@
 폰으로 접속하면 **현재 수분값과 상태가 실시간으로 보이고**, "지금 물주기" 버튼으로 수동 급수도 한다.
 자동 급수(3단계)도 그대로 동작.
 
-## 핵심 — 출석 프로젝트가 여기서 재활용!
+## 핵심 — 앞서 배운 웹서버가 여기서 재활용!
 출석에서 배운 그 **AP 모드 웹서버**를 그대로 가져왔어요. 화면 내용만 "출석" → "수분값"으로 바뀐 거예요.
 ```cpp
 WiFi.softAP(AP_SSID, AP_PASS);   // ESP32가 와이파이 만들기 (출석과 동일!)
@@ -36,7 +36,7 @@ int raw = analogRead(SOIL_PIN);            // 접속할 때마다 현재 수분�
 - [ ] 마른 상태로 두면 자동 급수도 동작한다 (시리얼 `자동 급수`)
 
 ## 잘 안 될 때
-- 접속 안 됨 → 출석 프로젝트와 동일. `http://` (https X), Brownout이면 IO0+RESET, 자세히는 출석의 [`docs/troubleshooting.md`](../../04_attendance/docs/troubleshooting.md)
+- 접속 안 됨 → `http://` (https X), Brownout이면 IO0+RESET, 자세히는 [`01_docs/troubleshooting_esp32_web.md`](../../01_docs/troubleshooting_esp32_web.md)
 - **수분값이 항상 0 또는 4095 고정** → 센서가 GPIO34에 제대로 연결됐는지, ADC1 핀(32~39) 맞는지 확인
 
 ## 직접 바꿔보기
