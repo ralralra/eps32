@@ -4,6 +4,7 @@
   동작:
     1) 학교 와이파이에 접속한다
     2) 2초마다 중계서버(Apps Script)에 "할 일 있나요?" 하고 물어본다 (폴링)
+       — 서버 통신은 별도 코어에서 따로 돌아서, 통신 중에도 카드 스캔이 멈추지 않는다
     3) 앱에서 출석체크(또는 등록)를 시작하면 → LED가 깜빡이며 카드 대기
        - 출석 모드: 천천히 깜빡 (0.5초)
        - 등록 모드: 빠르게 깜빡 (0.15초)
@@ -43,25 +44,44 @@ const unsigned long HTTP_TIMEOUT_MS = 25000; // 서버 응답 대기 한도 (25�
 // ↑ Apps Script는 리다이렉트 때문에 요청이 두 번 일어나고, 스크립트가 처음 깨어날 때는
 //   시간이 더 걸린다. 핫스팟처럼 느린 회선에서는 10초로는 부족해 -11(시간 초과)이 난다.
 
-const unsigned long POLL_MS = 2000;          // 대기 중 폴링 간격 (2초)
-const unsigned long POLL_SESSION_MS = 5000;  // 세션 중 폴링 간격 (5초)
-// ↑ 서버 요청(HTTPS)은 한 번에 2~3초씩 걸려서 그동안 카드 스캔이 멈춘다.
-//   세션 중에는 폴링을 뜸하게 해서 카드 스캔 시간을 최대한 확보한다.
+const unsigned long POLL_MS = 2000;          // 폴링 간격 (2초)
+// ↑ 서버 요청(HTTPS)은 한 번에 2~3초씩 걸리지만, 별도 코어에서 처리하므로
+//   그동안에도 카드 스캔은 계속된다. 그래서 세션 중에도 간격을 늘릴 필요가 없다.
 
 const unsigned long RFID_CHECK_MS = 5000;    // 리더기 상태 자가진단 간격 (5초)
 const unsigned long SAME_CARD_MS  = 1500;    // 같은 카드 연속 인식 무시 시간 (1.5초)
 
 MFRC522 rfid(PIN_SS, PIN_RST);
 
-// 현재 상태: IDLE(대기) / ATTEND(출석 세션) / REGISTER(등록 세션)
+// ── 두 개의 일을 각각 다른 코어에서 처리한다 ──────────────────
+//   코어 1 (loop)        : 카드 스캔·LED·부저 — 절대 멈추지 않아야 하는 일
+//   코어 0 (networkTask) : 서버 통신 — 한 번에 2~3초, 느리면 25초까지 걸리는 일
+//   둘은 아래 두 개의 큐로만 주고받는다 (변수를 같이 만지면 위험)
+struct TagJob   { char uid[24]; };                  // loop → 통신: "이 카드 보내줘"
+struct NetEvent { uint8_t kind; char text[96]; };   // 통신 → loop: 결과 전달
+const uint8_t EV_MODE = 0;    // 서버가 알려준 모드 (IDLE/ATTEND/REGISTER)
+const uint8_t EV_TAG  = 1;    // 카드 전송 결과
+
+QueueHandle_t tagQueue    = nullptr;
+QueueHandle_t resultQueue = nullptr;
+
+// 현재 상태: IDLE(대기) / ATTEND(출석 세션) / REGISTER(등록 세션) / SENDING(전송 중)
 String mode = "IDLE";
-unsigned long lastPoll = 0;
 unsigned long lastBlink = 0;
 bool ledOn = false;
 
 unsigned long lastRfidCheck = 0;  // 마지막 리더기 자가진단 시각
 String lastUid = "";              // 마지막으로 처리한 카드 UID
 unsigned long lastTagMs = 0;      // 그 카드를 처리한 시각
+
+// 아래에서 정의하는 함수들 미리 알리기 (파일 순서와 무관하게 컴파일되도록)
+void handleCard();
+void checkRfidHealth();
+void handleTagResult(String res);
+void networkTask(void* param);
+String httpGet(String url);
+String explainHttpError(int code);
+void beep(int ms);
 
 // 내장 LED와 외부 LED(GPIO16)를 항상 같이 켜고 끈다
 void setLed(bool on) {
@@ -100,6 +120,19 @@ void setup() {
   Serial.println(WiFi.localIP());
 
   diagnoseServer();     // 중계서버가 제대로 응답하는지 먼저 점검
+
+  // 통신 담당을 코어 0에서 따로 돌린다.
+  // 이렇게 하면 서버 응답이 늦어도 카드 스캔(코어 1)은 계속된다.
+  tagQueue    = xQueueCreate(4, sizeof(TagJob));
+  resultQueue = xQueueCreate(8, sizeof(NetEvent));
+  if (tagQueue == nullptr || resultQueue == nullptr) {
+    Serial.println("메모리 부족 - 보드를 다시 켜주세요");
+    while (true) delay(1000);
+  }
+  if (xTaskCreatePinnedToCore(networkTask, "attend-net", 8192,
+                              nullptr, 1, nullptr, 0) != pdPASS) {
+    Serial.println("통신 담당 시작 실패 - 카드 인식만 동작합니다");
+  }
 
   Serial.println("앱에서 [출석체크 시작]을 누르면 LED가 깜빡입니다.");
   beep(80); beep(80);   // 준비 완료 알림
@@ -191,22 +224,34 @@ void diagnoseServer() {
 }
 
 void loop() {
-  // 와이파이가 끊기면 재접속
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("와이파이 끊김 → 재접속");
-    WiFi.reconnect();
-    delay(2000);
-    return;
-  }
-
-  // ① 카드 확인이 최우선 — loop가 도는 동안 거의 빈틈없이 카드를 스캔한다
-  if (handleCard()) return;
+  // ① 카드 확인이 최우선 — 서버 통신이 다른 코어에서 도는 동안에도 계속 스캔한다
+  handleCard();
 
   // ② 리더기가 먹통이 되지 않았는지 주기적으로 자가진단
   checkRfidHealth();
 
-  // ③ 세션 중이면 LED 깜빡이기 (출석: 0.5초 / 등록: 0.15초)
-  if (mode != "IDLE") {
+  // ③ 통신 담당(코어 0)이 보내온 결과 처리
+  NetEvent ev;
+  while (xQueueReceive(resultQueue, &ev, 0) == pdTRUE) {
+    if (ev.kind == EV_TAG) {
+      handleTagResult(String(ev.text));
+      mode = "IDLE";            // 처리 끝 → 대기 상태로
+      setLed(false);
+    } else if (ev.kind == EV_MODE) {
+      // 카드를 보내는 중이면 서버 모드 변경은 무시 (결과부터 마무리)
+      if (mode == "SENDING") continue;
+      String next = String(ev.text);
+      if (next != mode) {
+        Serial.println("모드 변경: " + mode + " -> " + next);
+        if (next == "IDLE") setLed(false);
+        mode = next;
+      }
+    }
+  }
+
+  // ④ 세션 중이면 LED 깜빡이기 (출석: 0.5초 / 등록: 0.15초)
+  //    전송 중(SENDING)에는 깜빡이지 않고 계속 켜 둔다
+  if (mode == "ATTEND" || mode == "REGISTER") {
     unsigned long interval = (mode == "REGISTER") ? 150 : 500;
     if (millis() - lastBlink >= interval) {
       lastBlink = millis();
@@ -215,57 +260,86 @@ void loop() {
     }
   }
 
-  // ④ 주기적으로 중계서버에 할 일이 있는지 물어본다
-  //    (요청하는 동안 스캔이 멈추므로, 세션 중에는 간격을 길게)
-  unsigned long pollInterval = (mode == "IDLE") ? POLL_MS : POLL_SESSION_MS;
-  if (millis() - lastPoll >= pollInterval) {
-    // 폴링으로 2~3초 멈추기 직전, 카드가 이미 올라와 있는지 한 번 더 확인
-    if (handleCard()) return;
+  delay(5);
+}
 
-    lastPoll = millis();
-    String res = httpGet(String(RELAY_URL) + "?action=poll&device=" + DEVICE_ID);
-    if (res == "ATTEND" || res == "REGISTER" || res == "IDLE") {
-      if (res != mode) {
-        Serial.println("모드 변경: " + mode + " → " + res);
-        if (res == "IDLE") setLed(false);
-      }
-      mode = res;
+// ── 서버 통신 담당 (코어 0에서 따로 돈다) ──────────────────────
+// 여기서만 인터넷을 쓴다. 한 번에 25초가 걸려도 카드 스캔(코어 1)은 멈추지 않는다.
+void networkTask(void* param) {
+  (void)param;
+  unsigned long lastPoll = 0;
+
+  for (;;) {
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("와이파이 끊김 -> 재접속");
+      WiFi.reconnect();
+      vTaskDelay(pdMS_TO_TICKS(2000));
+      continue;
     }
+
+    // 보낼 카드가 있으면 폴링보다 먼저 처리한다
+    TagJob job;
+    if (xQueueReceive(tagQueue, &job, 0) == pdTRUE) {
+      String res = httpGet(String(RELAY_URL) + "?action=tag&device=" + DEVICE_ID +
+                           "&uid=" + job.uid);
+      NetEvent ev{};
+      ev.kind = EV_TAG;
+      res.toCharArray(ev.text, sizeof(ev.text));
+      xQueueSend(resultQueue, &ev, 0);
+      lastPoll = millis();       // 방금 통신했으니 폴링은 나중에
+    }
+    else if (millis() - lastPoll >= POLL_MS) {
+      lastPoll = millis();
+      String res = httpGet(String(RELAY_URL) + "?action=poll&device=" + DEVICE_ID);
+      if (res == "ATTEND" || res == "REGISTER" || res == "IDLE") {
+        NetEvent ev{};
+        ev.kind = EV_MODE;
+        res.toCharArray(ev.text, sizeof(ev.text));
+        xQueueSend(resultQueue, &ev, 0);
+      }
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(20));
   }
 }
 
 // 카드가 태그되면 처리한다. 처리했으면 true를 반환
 // 세션 중이면 서버로 전송, 대기 중이면 확인용으로 UID만 출력
-bool handleCard() {
-  if (!cardTagged()) return false;
+void handleCard() {
+  if (!cardTagged()) return;
 
   String uid = readUid();
   rfid.PICC_HaltA();
   rfid.PCD_StopCrypto1();
 
   // 같은 카드가 1.5초 안에 또 읽히면 무시 (카드를 대고 있는 동안 중복 처리 방지)
-  // 예전엔 delay(1000)로 통째로 멈췄는데, 그동안 다음 사람 카드도 못 읽었다.
-  // 이제는 멈추지 않아서 다른 카드는 바로바로 인식된다.
-  if (uid == lastUid && millis() - lastTagMs < SAME_CARD_MS) return false;
+  if (uid == lastUid && millis() - lastTagMs < SAME_CARD_MS) return;
   lastUid = uid;
   lastTagMs = millis();
 
   if (mode == "IDLE") {
     // 세션이 없을 때도 카드가 잘 읽히는지 시리얼로 확인할 수 있게 출력만 한다
-    Serial.println("카드 인식 (세션 없음 → 전송 안 함): UID = " + uid);
-    return true;
+    Serial.println("카드 인식 (세션 없음 -> 전송 안 함): UID = " + uid);
+    return;
+  }
+  if (mode == "SENDING") {
+    // 앞 카드의 결과를 기다리는 중
+    Serial.println("앞 사람 처리 중입니다 - 잠시 후 다시 태그해주세요");
+    return;
   }
 
-  Serial.println("태그됨! UID = " + uid + " → 서버 전송");
-  setLed(true);
+  Serial.println("태그됨! UID = " + uid + " -> 서버 전송");
+  setLed(true);                 // 전송 중에는 계속 켜 둔다
 
-  String res = httpGet(String(RELAY_URL) + "?action=tag&device=" + DEVICE_ID + "&uid=" + uid);
-  handleTagResult(res);
-
-  mode = "IDLE";               // 처리 끝 → 대기 상태로
-  setLed(false);
-  lastPoll = millis();         // 방금 통신했으니 다음 폴링은 나중에
-  return true;
+  // 통신 담당(코어 0)에게 넘기고 바로 돌아온다 - 여기서 기다리지 않는다
+  TagJob job{};
+  uid.toCharArray(job.uid, sizeof(job.uid));
+  if (xQueueSend(tagQueue, &job, 0) == pdTRUE) {
+    mode = "SENDING";
+  } else {
+    Serial.println("전송 대기열이 가득 찼습니다 - 다시 태그해주세요");
+    setLed(false);
+  }
 }
 
 // 카드가 리더기 위에 있는지 WUPA(깨우기) 방식으로 확인
