@@ -58,7 +58,7 @@ void setup() {
 #include <ESP32Servo.h>
 Servo servo[4];
 // setup(): servo[i].attach(SERVO_PIN[i]);
-// 열기: servo[i].write(90);  잠그기: servo[i].write(0);  (각도는 기구에 맞게 조정)
+// 열기: servo[i].write(0);  잠그기: servo[i].write(180);  (방향이 반대면 두 값을 서로 바꾸세요)
 ```
 
 ## 아두이노 센서쉴드를 꽂아서 쓰는 경우

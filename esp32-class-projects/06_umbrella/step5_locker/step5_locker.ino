@@ -7,7 +7,7 @@
   ● 대여: 열림 → 우산이 빠지면 5초 뒤 닫힘 → 확인
        우산 없음 → 대여완료
        30초가 지나도 안 가져가면 → 닫고 대여실패 + 서버에 대여 취소 요청
-  ● 반납: 열림 → 우산이 꽂히면 닫힘 → 확인
+  ● 반납: 열림 → 우산이 꽂히면 "즉시" 닫힘 → 확인 (잡아주는 기구가 없어서)
        우산 감지 → 반납완료
        감지 안 됨 → 다시 열림 (최대 3회, 그래도 없으면 반납실패)
 
@@ -64,10 +64,11 @@ constexpr uint8_t REED_PINS[SLOT_COUNT]  = {13, 14, 27, 4};
 // 반대로 동작하는 센서 모듈이면 HIGH로 바꾸세요.
 constexpr uint8_t REED_ACTIVE_LEVEL = LOW;
 
-// ⚠ 0/180은 쓰지 마세요. SG90은 양 끝에 물리적 스토퍼가 있어서, 끝단을 명령하면
-//   부딪힌 채 계속 힘을 쓰는 상태(스톨)가 됩니다 — 전류가 최대로 올라가고 뜨거워져요.
-constexpr int SERVO_CLOSED_ANGLE = 20;      // 잠김
-constexpr int SERVO_OPEN_ANGLE   = 100;     // 열림
+// 이 기구는 실측으로 확인한 값입니다: 180도=잠김, 0도=열림 (기구 방향에 따라 다름)
+// 끝단 각도라 서보가 스토퍼에 눌린 채 힘을 쓸 수 있지만, 동작 후 힘을 빼므로(detach)
+// 계속 전류를 먹지는 않습니다. RELEASE_WHEN_IDLE을 끄면 발열이 생길 수 있어요.
+constexpr int SERVO_CLOSED_ANGLE = 180;     // 잠김
+constexpr int SERVO_OPEN_ANGLE   = 0;       // 열림
 constexpr int SERVO_MIN_PULSE_US = 500;
 constexpr int SERVO_MAX_PULSE_US = 2400;
 
@@ -80,7 +81,9 @@ constexpr bool RELEASE_WHEN_IDLE = true;
 // ─────────────────────────────────────────────────────────────
 
 constexpr uint32_t RENT_CLOSE_DELAY_MS    = 5000;   // 우산이 빠진 뒤 닫기까지
-constexpr uint32_t RETURN_PRESENT_HOLD_MS = 800;    // 꽂힌 상태가 이만큼 유지되면 닫기
+constexpr uint32_t RETURN_PRESENT_HOLD_MS = 0;      // 우산이 감지되면 바로 닫음
+// ↑ 우산을 잡아주는 기구가 없어서 감지 즉시 닫습니다. 리드 값은 이미 80ms
+//   디바운스를 거치므로 순간 노이즈로 닫히지는 않아요. 너무 민감하면 300으로.
 constexpr uint32_t SERVO_MOVE_MS          = 900;    // 서보가 다 움직일 때까지
 constexpr uint32_t REED_DEBOUNCE_MS       = 80;     // 접점 떨림 무시
 constexpr uint8_t  RETURN_RETRY_MAX       = 3;      // 반납 재개방 최대 횟수
