@@ -349,6 +349,53 @@ function ensureSheetTab(name) {
   return ss.getSheetByName(name) || ss.insertSheet(name);
 }
 
+// ─────────── 새 시트 초기 설정 (스크립트 편집기에서 직접 실행) ───────────
+// 빈 시트에 필요한 탭·제목 행·기본 데이터를 한 번에 만듭니다.
+// 이미 있는 탭과 데이터는 건드리지 않으므로 여러 번 실행해도 안전합니다.
+function setupSheets() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const defs = [
+    [TAB.users,
+     ["user_id","name","phone","email","created_at","status","account_masked"], []],
+    [TAB.lockers,
+     ["locker_id","locker_name","location","latitude","longitude",
+      "total_slots","available_slots","status","last_update"],
+     [["L001","도서관 앞 보관함","학교 도서관 앞","","",4,4,"active",new Date()]]],
+    [TAB.umbrellas,
+     ["umbrella_id","locker_id","slot_no","status","last_check_time",
+      "total_rentals","last_user_id"],
+     [["UB001","L001",1,"available",new Date(),0,""],
+      ["UB002","L001",2,"available",new Date(),0,""],
+      ["UB003","L001",3,"available",new Date(),0,""],
+      ["UB004","L001",4,"available",new Date(),0,""]]],
+    [TAB.rentals,
+     ["rental_id","user_id","umbrella_id","locker_id","slot_no","plan_hours",
+      "plan_price","rental_time","expected_return","return_time","duration_min",
+      "status","payment_status"], []],
+    [TAB.payments,
+     ["payment_id","rental_id","user_id","amount","method","account_masked",
+      "payment_time","status"], []],
+    ["daily_stats",
+     ["date","total_rentals","total_returns","active_rentals","popular_locker",
+      "popular_umbrella","avg_duration_min"], []],
+    [TAB.plans,
+     ["plan_id","plan_name","hours","price","extra_24h_price","status"],
+     [["P001","24시간",24,2000,1000,"active"],
+      ["P002","48시간",48,3000,1000,"active"],
+      ["P003","72시간",72,4000,1000,"active"]]]
+  ];
+  defs.forEach(function(def) {
+    const name = def[0], headers = def[1], rows = def[2];
+    let sh = ss.getSheetByName(name);
+    if (!sh) sh = ss.insertSheet(name);
+    if (sh.getLastRow() === 0) {           // 완전히 빈 탭에만 채움
+      sh.appendRow(headers);
+      rows.forEach(function(r) { sh.appendRow(r); });
+    }
+  });
+  ensureSheetTab(TAB.commands);
+}
+
 // ─────────── 박람회용: 데모 초기화 (스크립트 편집기에서 직접 실행) ───────────
 // rentals·payments를 비우고 모든 우산을 available로 되돌립니다. 부스 리셋용!
 function resetDemo() {

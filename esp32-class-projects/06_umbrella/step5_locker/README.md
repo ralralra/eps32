@@ -84,6 +84,11 @@ DB 시트에 아래 탭과 제목 행이 있어야 합니다 (열 **순서**는 
 - `commands` 탭은 **자동 생성**됩니다 (ESP32 명령 대기줄 — 위에서부터 차례로 실행)
 - umbrellas의 status는 `available` / `rented` **영어로 통일**하세요
 
+### ①-1 빈 시트로 새로 시작한다면 — `setupSheets()` 한 번
+탭을 손으로 만들 필요 없이, Apps Script 편집기에서 함수 목록에서
+**`setupSheets`를 골라 실행(▶)** 하면 위 탭 전부(제목 행 + 보관함 L001·우산 4개·
+요금제 3종 기본 데이터)가 자동으로 만들어집니다. 이미 있는 탭은 건드리지 않아요.
+
 ### ② Apps Script 배포
 1. 시트에서 `확장 프로그램 → Apps Script` → [`apps_script/umbrella_locker.gs`](apps_script/umbrella_locker.gs) 붙여넣기
 2. 탭 이름이 다르면 코드 맨 위 `TAB` 설정만 수정
