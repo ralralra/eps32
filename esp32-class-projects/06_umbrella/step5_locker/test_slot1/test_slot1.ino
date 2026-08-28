@@ -12,8 +12,8 @@
     - 자석을 대거나 떼면 즉시 "우산 있음/없음"이 찍힘 (리드 확인)
 
   시리얼 모니터(115200) 명령:
-    o = 열기 (100도, 열린 채 유지 — 전압 재보기 좋음)
-    c = 닫기 (20도)
+    o = 열기 (0도, 열린 채 유지 — 전압 재보기 좋음)
+    c = 닫기 (180도)
     t = 대여 흐름 테스트: 열림 → 5초 → 닫힘 → 우산 유무로 결과 판정
     w = 왕복 10회 (열림↔닫힘 반복 — 전원이 버티는지 스트레스 테스트)
     s = 지금 상태 보기
@@ -24,8 +24,8 @@
 const int SERVO_PIN = 16;     // 실드 5번 자리
 const int REED_PIN  = 13;     // 실드 9번 자리
 
-const int ANGLE_CLOSED = 20;
-const int ANGLE_OPEN   = 100;
+const int ANGLE_CLOSED = 180;   // 실측 확인값
+const int ANGLE_OPEN   = 0;
 
 Servo servo;
 bool lastPresent;
@@ -52,7 +52,7 @@ void setup() {
   Serial.println("\n=== 1번 슬롯 테스트 ===");
   Serial.println("명령: o=열기  c=닫기  t=대여흐름  w=왕복10회  s=상태");
 
-  Serial.println("닫힘(20도)으로 시작");
+  Serial.println("닫힘(180도)으로 시작");
   moveTo(ANGLE_CLOSED);
 
   lastPresent = umbrellaPresent();
@@ -76,12 +76,12 @@ void loop() {
   if (cmd.length() == 0) return;
 
   if (cmd == "o") {
-    Serial.println("열림 (100도) — 이 상태로 실드 V-G 전압을 재보세요");
+    Serial.println("열림 (0도) — 이 상태로 실드 V-G 전압을 재보세요");
     if (!servo.attached()) servo.attach(SERVO_PIN, 500, 2400);
     servo.write(ANGLE_OPEN);              // 열어둔 채 유지 (detach 안 함)
   }
   else if (cmd == "c") {
-    Serial.println("닫힘 (20도)");
+    Serial.println("닫힘 (180도)");
     moveTo(ANGLE_CLOSED);
   }
   else if (cmd == "t") {
