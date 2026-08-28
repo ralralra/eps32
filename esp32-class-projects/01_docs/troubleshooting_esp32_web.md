@@ -73,5 +73,6 @@ rst:0xc (SW_CPU_RESET) ...
 | 증상 | 해결 |
 |---|---|
 | `Connecting......____` 무한 | 보드 **BOOT 버튼** 누른 채로 Upload, `Writing` 시작되면 떼기 |
+| 쓰다가 중간에 실패 — `Bad data length`, `Failed to write compressed data` | **업로드 속도를 115200으로 낮추기** (툴 → Upload Speed). 921600은 케이블·컨버터가 조금만 불안해도 중간에 깨져요. 그래도 안 되면 짧은 데이터 케이블로 본체 USB에 직결, 실드의 외부 전원은 업로드 동안 분리 |
 | 포트가 안 보임 | USB 드라이버(CP210x/CH340) 설치, 데이터 케이블인지 확인 |
 | 업로드는 됐는데 시리얼 깨짐 | 모니터 baud 115200 확인 |
