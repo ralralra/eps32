@@ -206,12 +206,16 @@ void requestCancel(uint8_t i) {
                "&slot=" + String(i + 1));
 }
 
-// 네 칸의 우산 유무를 서버에 보고 (백엔드가 기대하는 p1~p4 형식)
-void requestReport() {
+// 네 칸의 우산 유무 보고는 "가장 최신 상태 한 번"이면 충분해서 큐에 쌓지 않고
+// 깃발만 세운다. 통신이 안 되던 동안 보고가 밀려 실패 메시지가 쏟아지지 않는다.
+volatile bool reportPending = false;
+void requestReport() { reportPending = true; }
+
+String buildReportQuery() {
   String q = String("?action=report&locker_id=") + LOCKER_ID;
   for (uint8_t i = 0; i < SLOT_COUNT; ++i)
     q += "&p" + String(i + 1) + "=" + String(slots[i].present ? 1 : 0);
-  queueRequest(q);
+  return q;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -463,6 +467,16 @@ void executeCommand(String command) {
 // 9. 네트워크 (별도 코어에서 실행 — 센서 타이밍을 방해하지 않게)
 // ─────────────────────────────────────────────────────────────
 
+// 자주 나오는 오류 코드에 원인 설명을 붙여준다
+String explainError(int code) {
+  if (code == -1)  return " — 서버까지 연결이 안 됨. 이 와이파이가 인터넷이 되는지 확인!"
+                          " (핫스팟이면 데이터 켜기, 로그인 필요한 공유기는 사용 불가)";
+  if (code == -11) return " — 응답이 늦음 (회선이 느리거나 서버가 깨어나는 중)";
+  if (code == 404) return " — 주소 없음 (URL이 시트의 /exec 주소인지 확인)";
+  if (code == 401 || code == 403) return " — 권한 (배포 액세스를 '모든 사용자'로)";
+  return "";
+}
+
 int httpsGet(const String& url, String& body) {
   WiFiClientSecure client;
   HTTPClient http;
@@ -532,7 +546,22 @@ void networkTask(void* parameter) {
       wasConnected = connected;
       Serial.println(connected ? "WiFi 연결됨 — 앱 명령 대기"
                                : "WiFi 끊김 — USB 명령만 동작합니다");
-      if (connected) requestReport();
+      if (connected) {
+        // 연결되자마자 서버가 진짜 닿는지 한 번 확인해서 알려준다
+        String body;
+        const int code = httpsGet(String(SERVER_URL) + "?action=cmd&probe=1", body);
+        if (code == HTTP_CODE_OK) {
+          Serial.println("서버 연결 확인 완료");
+          if (body.length() > 0) {          // 밀려 있던 명령이면 바로 실행
+            CommandMessage msg{};
+            decodeCommand(body).toCharArray(msg.text, sizeof(msg.text));
+            if (strlen(msg.text) > 0) xQueueSend(commandQueue, &msg, 0);
+          }
+        } else {
+          Serial.println("서버 연결 안 됨 (" + String(code) + ")" + explainError(code));
+        }
+        requestReport();
+      }
     }
 
     if (!connected) {
@@ -550,7 +579,23 @@ void networkTask(void* parameter) {
     if (xQueueReceive(outboundQueue, &out, 0) == pdTRUE) {
       String body;
       const int code = httpsGet(String(SERVER_URL) + out.query, body);
-      if (code != HTTP_CODE_OK) Serial.printf("서버 전송 실패 (%d)\n", code);
+      if (code != HTTP_CODE_OK)
+        Serial.println("서버 전송 실패 (" + String(code) + ")" + explainError(code));
+    }
+    else if (reportPending) {              // 상태 보고는 최신 것 한 번만
+      reportPending = false;
+      String body;
+      const int code = httpsGet(String(SERVER_URL) + buildReportQuery(), body);
+      if (code != HTTP_CODE_OK) {
+        static bool noticed = false;       // 같은 실패를 계속 떠들지 않는다
+        if (!noticed) {
+          Serial.println("현황 보고 실패 (" + String(code) + ")" + explainError(code));
+          Serial.println("  (연결이 회복되면 자동으로 다시 보냅니다)");
+          noticed = true;
+        }
+        reportPending = true;              // 다음 기회에 다시
+        vTaskDelay(pdMS_TO_TICKS(5000));   // 실패 직후 재시도 홍수 방지
+      }
     }
 
     // 큐에 자리가 있을 때만 명령을 꺼냅니다 — 받아놓고 잃어버리지 않게
