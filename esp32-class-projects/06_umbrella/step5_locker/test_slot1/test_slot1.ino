@@ -34,7 +34,10 @@ bool lastPresent;
 bool umbrellaPresent() { return digitalRead(REED_PIN) == LOW; }
 
 void moveTo(int angle) {
-  if (!servo.attached()) servo.attach(SERVO_PIN, 500, 2400);
+  if (!servo.attached()) {
+    if (servo.attach(SERVO_PIN, 500, 2400) == 0)
+      Serial.printf("⚠ 서보 연결 실패 — GPIO%d에 PWM을 못 잡았어요\n", SERVO_PIN);
+  }
   servo.write(angle);
   delay(900);                 // 다 움직일 때까지
   servo.detach();             // 힘 빼기 (전류·떨림 감소)
@@ -48,6 +51,13 @@ void setup() {
   Serial.begin(115200);
   delay(300);
   pinMode(REED_PIN, INPUT_PULLUP);
+
+  // ESP32Servo가 쓸 PWM 타이머 확보 — 없으면 attach()가 조용히 실패합니다
+  ESP32PWM::allocateTimer(0);
+  ESP32PWM::allocateTimer(1);
+  ESP32PWM::allocateTimer(2);
+  ESP32PWM::allocateTimer(3);
+  servo.setPeriodHertz(50);
 
   Serial.println("\n=== 1번 슬롯 테스트 ===");
   Serial.println("명령: o=열기  c=닫기  t=대여흐름  w=왕복10회  s=상태");
