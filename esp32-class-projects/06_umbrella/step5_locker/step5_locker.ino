@@ -19,6 +19,7 @@
             보관함 번호가 붙어 있어서 다른 보관함 명령은 집어오지 않습니다
     ② USB : 시리얼 모니터(115200)
             r1~r4 대여 · b1~b4 반납 · o1~o4 그냥 열기 · c1~c4 그냥 닫기 · s 상태
+  ※ 서보가 안 움직이면 ENABLE_WIFI를 false로 두고 ②만 써보세요 — 전원 문제인지 바로 갈립니다
 
   배선: docs/wiring_servo_reed.md — 센서쉴드에 그대로 꽂으면 됩니다
     서보 신호: GPIO16·17·25·26 (실드 숫자 5·4·3·2)
@@ -52,6 +53,12 @@ const char SERVER_URL[] = "https://script.google.com/macros/s/XXXX/exec";
 // 이 보드가 담당하는 보관함 — 시트 lockers 탭의 locker_id와 같아야 합니다.
 // 슬롯 번호(1~4)는 보관함마다 겹치므로 이 값으로 구분합니다.
 const char LOCKER_ID[] = "L001";
+
+// WiFi를 아예 끄고 시리얼 명령만 쓰는 모드 (false로 바꾸기)
+//   ① 서보가 안 움직일 때 원인 가리기 — test_slot1처럼 WiFi 없는 조건이 됩니다.
+//      여기서 잘 움직이면 코드가 아니라 "WiFi가 켜지면 전원이 부족한 것"입니다.
+//   ② 인터넷이 없는 발표장에서 시리얼로만 시연할 때
+constexpr bool ENABLE_WIFI = true;
 
 // ─────────────────────────────────────────────────────────────
 // 2. 하드웨어 설정
@@ -705,6 +712,10 @@ void setup() {
   Serial.println("  r1~r4 = 대여   b1~b4 = 반납   s = 슬롯 상태");
   Serial.println("  o1~o4 = 그냥 열기   c1~c4 = 그냥 닫기  (서보·전원 점검용)");
 
+  if (!ENABLE_WIFI) {
+    Serial.println("WiFi 꺼둠 — 시리얼 명령만 동작합니다 (ENABLE_WIFI = false)");
+    return;
+  }
   if (xTaskCreatePinnedToCore(networkTask, "umbrella-net", 8192,
                               nullptr, 1, nullptr, 0) != pdPASS) {
     Serial.println("네트워크 시작 실패 — USB 명령만 동작합니다");
