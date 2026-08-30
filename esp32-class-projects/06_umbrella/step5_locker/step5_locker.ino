@@ -15,7 +15,8 @@
   WiFi가 느려도 센서 감지와 5초 타이머가 밀리지 않습니다.
 
   명령 두 가지 경로
-    ① 앱  : 서버 명령 큐를 1.5초마다 확인 ("RENT:1" / "RETURN:1")
+    ① 앱  : 서버 명령 큐를 1.5초마다 확인 ("RENT:L001:1" / "RETURN:L001:1")
+            보관함 번호가 붙어 있어서 다른 보관함 명령은 집어오지 않습니다
     ② USB : 시리얼 모니터(115200)
             r1~r4 대여 · b1~b4 반납 · o1~o4 그냥 열기 · c1~c4 그냥 닫기 · s 상태
 
@@ -209,6 +210,14 @@ void requestCancel(uint8_t i) {
                "&slot=" + String(i + 1));
 }
 
+// 반납 실패 — 서버는 '반납' 요청을 받은 순간 이미 반납 완료로 적고 정산까지
+// 끝냅니다. 우산이 실제로 안 들어왔으면 이걸 보내 되돌려야, 우산은 손에 있는데
+// 시트에는 반납된 걸로 남아 다음 사람에게 빈 칸이 열리는 일이 없습니다.
+void requestReturnFailed(uint8_t i) {
+  queueRequest(String("?action=return_failed&locker_id=") + LOCKER_ID +
+               "&slot=" + String(i + 1));
+}
+
 // 네 칸의 우산 유무 보고는 "가장 최신 상태 한 번"이면 충분해서 큐에 쌓지 않고
 // 깃발만 세운다. 통신이 안 되던 동안 보고가 밀려 실패 메시지가 쏟아지지 않는다.
 volatile bool reportPending = false;
@@ -318,6 +327,7 @@ void updateSlotState(uint8_t i, uint32_t now) {
         if (OPEN_FAILSAFE_MS > 0 && hasElapsed(now, s.stateSince, OPEN_FAILSAFE_MS)) {
           Serial.println("반납실패 — 우산이 안 들어왔어요");
           lockSlot(i);
+          requestReturnFailed(i);
           requestReport();
         }
       }
@@ -327,6 +337,7 @@ void updateSlotState(uint8_t i, uint32_t now) {
       if (OPEN_FAILSAFE_MS > 0 && hasElapsed(now, s.stateSince, OPEN_FAILSAFE_MS)) {
         Serial.println("반납실패 — 시간이 지났어요");
         lockSlot(i);
+        requestReturnFailed(i);
         requestReport();
       }
       break;
@@ -340,6 +351,7 @@ void updateSlotState(uint8_t i, uint32_t now) {
       } else if (s.returnAttempts >= RETURN_RETRY_MAX) {
         Serial.printf("반납실패 — %u번 열어도 우산이 없어요\n", RETURN_RETRY_MAX);
         setState(i, FlowState::LOCKED_IDLE, now);
+        requestReturnFailed(i);
         requestReport();
       } else {
         s.returnAttempts++;                   // 다시 한 번 기회
@@ -447,8 +459,9 @@ void executeCommand(String command) {
   if (count == 2) {
     verb = parts[0]; slotText = parts[1];
   } else if (count == 3) {
-    if (parts[0] == LOCKER_ID) { locker = parts[0]; verb = parts[1]; slotText = parts[2]; }
-    else                       { verb = parts[0]; locker = parts[1]; slotText = parts[2]; }
+    // "L001:RENT:1"처럼 보관함이 앞에 오는 형식도 받아줍니다
+    if (parts[0].equalsIgnoreCase(LOCKER_ID)) { locker = parts[0]; verb = parts[1]; slotText = parts[2]; }
+    else                                      { verb = parts[0]; locker = parts[1]; slotText = parts[2]; }
   } else {
     Serial.println("모르는 명령: " + command +
                    "  (r1~r4=대여, b1~b4=반납, o1~o4=열기, c1~c4=닫기, s=상태)");
@@ -456,7 +469,7 @@ void executeCommand(String command) {
   }
 
   locker.trim();
-  if (locker.length() > 0 && locker != LOCKER_ID) {
+  if (locker.length() > 0 && !locker.equalsIgnoreCase(LOCKER_ID)) {
     Serial.println("다른 보관함 명령이라 무시: " + locker);
     return;
   }
@@ -552,7 +565,8 @@ void networkTask(void* parameter) {
       if (connected) {
         // 연결되자마자 서버가 진짜 닿는지 한 번 확인해서 알려준다
         String body;
-        const int code = httpsGet(String(SERVER_URL) + "?action=cmd&probe=1", body);
+        const int code = httpsGet(String(SERVER_URL) +
+                                  "?action=cmd&probe=1&locker_id=" + LOCKER_ID, body);
         if (code == HTTP_CODE_OK) {
           Serial.println("서버 연결 확인 완료");
           if (body.length() > 0) {          // 밀려 있던 명령이면 바로 실행
