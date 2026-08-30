@@ -6,6 +6,7 @@
 
   시트 탭: users / lockers / umbrellas / rentals / payments / plans
            (commands 탭은 없으면 자동 생성 — ESP32 명령 큐)
+  ※ 처음 쓰는 빈 시트라면 편집기에서 setupSheets()를 한 번 실행하세요.
 
   배포: 확장 프로그램 → Apps Script → 배포 → 새 배포 → 웹 앱
         "액세스 권한: 모든 사용자" → /exec URL을 앱과 ESP32에 넣기
@@ -19,7 +20,8 @@
     URL?action=rent&user_id=U001&locker_id=L001&umbrella_id=UB002&plan_id=P001
     URL?action=return&user_id=U001                        → 반납 + 후불 정산(가상 결제)
     URL?action=history&user_id=U001                       → 이용·결제 내역
-    URL?action=cmd                                        → ESP32용 (읽으면 비워짐)
+    URL?action=cmd&locker_id=L001                         → ESP32용 (읽으면 비워짐)
+      ⚠ 브라우저로 열면 보드가 받아야 할 명령을 가로챕니다 — 문 안 열릴 때만 확인용으로!
 
   ★ 대여/반납/정산은 rentals·umbrellas·lockers·payments를 이 스크립트가
     "한 번에" 갱신합니다. 시트를 손으로 고치면 정합성이 깨져요!
@@ -54,12 +56,14 @@ function route(e) {
     if (a === "rent")             return json(rent(e));
     if (a === "return")           return json(returnUmbrella(e));
     if (a === "history")          return json(history(e));
-    if (a === "cmd")              return text(popCommand());
+    if (a === "cmd")              return text(popCommand(e.parameter.locker_id));
     if (a === "report")           return json(report(e));
     if (a === "cancel")           return json(cancelRental(e));
+    if (a === "return_failed")    return json(returnFailed(e));
     if (a === "getumbrella")      return json(getUmbrella(e));   // 기존 앱 호환
     return json({ ok: false, error:
-      "action을 지정하세요 (register/register_account/lockers/plans/status/rent/return/history/cmd/report/cancel)" });
+      "action을 지정하세요 (register/register_account/lockers/plans/status/rent/return/" +
+      "history/cmd/report/cancel/return_failed)" });
   } catch (err) {
     return json({ ok: false, error: String(err) });
   } finally {
@@ -204,8 +208,9 @@ function rent(e) {
     status: "rented", last_user_id: userId, last_check_time: now,
     total_rentals: Number(target.total_rentals || 0) + 1
   });
-  bumpAvailableSlots(target.locker_id, -1);      // ③ 보관함 빈 슬롯
-  pushCommand("RENT:" + target.slot_no);         // ④ ESP32 슬롯 열림 (보드 없으면 무시됨)
+  recountAvailableSlots(target.locker_id);       // ③ 보관함 빈 슬롯(실제 개수로 다시 셈)
+  // ④ ESP32 슬롯 열림 (그 보관함 보드만 가져갑니다 · 보드가 없으면 큐에 남았다 정리됨)
+  pushCommand("RENT", target.locker_id, target.slot_no);
 
   return { ok: true, rental_id: rentalId, umbrella_id: target.umbrella_id,
            locker_id: target.locker_id, slot_no: Number(target.slot_no),
@@ -245,7 +250,7 @@ function returnUmbrella(e) {
   updateRow(TAB.umbrellas, "umbrella_id", rental.umbrella_id, {
     status: "available", last_check_time: now
   });
-  bumpAvailableSlots(rental.locker_id, +1);
+  recountAvailableSlots(rental.locker_id);
   // ── ③ 가상 결제 기록 ──
   const user = findRow(TAB.users, "user_id", userId);
   const paymentId = nextId(TAB.payments, "payment_id", "P");
@@ -256,7 +261,7 @@ function returnUmbrella(e) {
     payment_time: now, status: "paid"
   });
   // ── ④ ESP32 슬롯 열림 ──
-  pushCommand("RETURN:" + rental.slot_no);
+  pushCommand("RETURN", rental.locker_id, rental.slot_no);
 
   return { ok: true, rental_id: rental.rental_id, slot_no: Number(rental.slot_no),
            duration_min: durationMin, plan_price: planPrice,
@@ -288,20 +293,76 @@ function history(e) {
 
 // ─────────────────── ESP32 연동 (선택 사항) ───────────────────
 
-function report(e) {             // 슬롯별 우산 유무(p1~p4) → last_check_time 갱신
+// 슬롯별 우산 유무(p1~p4) 보고 — 30초마다 보드가 보냅니다.
+// ★ 단순히 시간만 찍지 않고 "시트가 현실과 맞는지" 대조합니다.
+//   빌린 사람이 없는데 rented로 남은 우산(테스트 잔재)이 실제로 꽂혀 있으면
+//   available로 되돌리고, 실제로 없는데 available이면 알려줍니다.
+//   available_slots도 매번 실제 개수로 다시 세서 어긋남이 쌓이지 않게 합니다.
+function report(e) {
   const lockerId = e.parameter.locker_id;      // 없으면 첫 번째로 찾은 우산 (보드 1대 기준)
   const um = sheetTable(TAB.umbrellas);
+  const rentals = sheetTable(TAB.rentals).rows;
   const now = new Date();
-  let updated = 0;
+  let updated = 0, healed = 0;
+  const mismatch = [];
+
   for (let slot = 1; slot <= 4; slot++) {
     const p = e.parameter["p" + slot];
     if (p === undefined) continue;
     const row = um.rows.find(r => parseInt(r.slot_no) === slot &&
       (!lockerId || String(r.locker_id) === String(lockerId)));
-    if (row) { updateRow(TAB.umbrellas, "umbrella_id", row.umbrella_id,
-                         { last_check_time: now }); updated++; }
+    if (!row) continue;
+
+    const present = String(p) === "1";
+    const changes = { last_check_time: now };
+    const active = rentals.find(r => String(r.umbrella_id) === String(row.umbrella_id) &&
+                                     r.status === "active");
+
+    if (present && row.status === "rented" && !active) {
+      changes.status = "available";             // 빌린 사람이 없는 고아 상태 → 복구
+      changes.last_user_id = "";
+      healed++;
+    } else if (!present && row.status === "available") {
+      mismatch.push(row.umbrella_id);           // 시트엔 있는데 실제로는 빈 칸
+    }
+    updateRow(TAB.umbrellas, "umbrella_id", row.umbrella_id, changes);
+    updated++;
   }
-  return { ok: true, updated: updated };
+
+  if (lockerId) recountAvailableSlots(lockerId);
+  return { ok: true, updated: updated, healed: healed, mismatch: mismatch };
+}
+
+// 반납 실패: 보드가 "문은 열었는데 우산이 안 들어왔어요"라고 알릴 때 —
+// 방금 처리한 반납을 되돌립니다(다시 대여 중 + 가상 결제 취소).
+// 이게 없으면 우산은 손에 있는데 시트에는 반납 완료로 남아, 다음 사람이
+// 그 칸을 빌렸을 때 빈 칸이 열립니다.
+function returnFailed(e) {
+  const slot = parseInt(e.parameter.slot);
+  const lockerId = e.parameter.locker_id;
+  const candidates = sheetTable(TAB.rentals).rows.filter(r =>
+    parseInt(r.slot_no) === slot && r.status === "returned" &&
+    (!lockerId || String(r.locker_id) === String(lockerId)));
+  if (!candidates.length)
+    return { ok: false, error: "슬롯 " + slot + "의 되돌릴 반납 기록이 없어요" };
+
+  candidates.sort(function(x, y) {                    // 가장 최근에 반납된 것부터
+    return new Date(x.return_time || 0) - new Date(y.return_time || 0);
+  });
+  const rental = candidates[candidates.length - 1];
+  updateRow(TAB.rentals, "rental_id", rental.rental_id, {
+    return_time: "", duration_min: "", status: "active", payment_status: "pending"
+  });
+  updateRow(TAB.umbrellas, "umbrella_id", rental.umbrella_id, {
+    status: "rented", last_check_time: new Date()
+  });
+  // 이 반납으로 만들어진 가상 결제 기록도 취소 표시
+  const pay = sheetTable(TAB.payments).rows
+    .filter(r => String(r.rental_id) === String(rental.rental_id)).pop();
+  if (pay) updateRow(TAB.payments, "payment_id", pay.payment_id, { status: "canceled" });
+
+  recountAvailableSlots(rental.locker_id);
+  return { ok: true, rental_id: rental.rental_id, reverted: true };
 }
 
 // 대여 취소: ESP32가 "우산이 안 빠졌어요"라고 알릴 때 — DB를 대여 전으로 되돌림
@@ -319,30 +380,56 @@ function cancelRental(e) {
               payment_status: "canceled" });
   updateRow(TAB.umbrellas, "umbrella_id", rental.umbrella_id,
             { status: "available", last_check_time: now });
-  bumpAvailableSlots(rental.locker_id, +1);
+  recountAvailableSlots(rental.locker_id);
   return { ok: true, rental_id: rental.rental_id, canceled: true };
 }
 
 // ─────────────────── 명령 큐 (ESP32 ↔ 시트) ───────────────────
 // 명령을 한 칸(A1)에 덮어쓰면, 폴링(3초) 사이에 두 명령이 겹칠 때 앞의 명령이
 // 사라져 문이 안 열립니다. 그래서 줄 단위로 쌓고 오래된 것부터 꺼내요(FIFO).
+//
+// ★ 명령에는 보관함 번호를 함께 넣습니다 → "RENT:L001:2"
+//   슬롯 번호(1~4)는 보관함마다 겹치기 때문에, 번호만 보내면 L002에서 빌린
+//   명령을 L001 보드가 집어가 엉뚱한 칸이 열립니다. 보드는 자기 locker_id와
+//   맞는 명령만 꺼내가고, 남의 명령은 큐에 그대로 남겨둡니다.
 function commandSheet() {
   const sh = ensureSheetTab(TAB.commands);
-  if (String(sh.getRange(1, 1).getValue()).trim() !== "command") {
-    sh.clear();                                  // 예전 A1 방식 잔재 정리
-    sh.appendRow(["command", "pushed_at"]);
+  const a1 = String(sh.getRange(1, 1).getValue()).trim();
+  const b1 = String(sh.getRange(1, 2).getValue()).trim();
+  if (a1 !== "command" || b1 !== "locker_id") {
+    sh.clear();            // 예전 형식(A1 한 칸·2열) 잔재 정리 — 대기 명령은 어차피 일회용
+    sh.appendRow(["command", "locker_id", "pushed_at"]);
   }
   return sh;
 }
-function pushCommand(cmd) {
-  commandSheet().appendRow([cmd, new Date()]);
+function pushCommand(verb, lockerId, slotNo) {
+  commandSheet().appendRow(
+    [verb + ":" + lockerId + ":" + slotNo, lockerId, new Date()]);
 }
-function popCommand() {          // 꺼내면서 지우기 — 같은 명령이 반복 실행되지 않게
+
+// 이 보관함 앞으로 온 가장 오래된 명령을 꺼내면서 지웁니다(같은 명령 반복 방지).
+// locker_id를 안 주면(브라우저 테스트 등) 맨 앞 명령을 그냥 꺼냅니다.
+function popCommand(lockerId) {
   const sh = commandSheet();
-  if (sh.getLastRow() < 2) return "";            // 헤더만 있으면 대기 명령 없음
-  const cmd = String(sh.getRange(2, 1).getValue() || "");
-  sh.deleteRow(2);
-  return cmd;
+  const last = sh.getLastRow();
+  if (last < 2) return "";                       // 헤더만 있으면 대기 명령 없음
+  const rows = sh.getRange(2, 1, last - 1, 2).getValues();
+  for (let i = 0; i < rows.length; i++) {
+    const cmd   = String(rows[i][0] || "").trim();
+    if (!cmd) continue;
+    const owner = String(rows[i][1] || "").trim() || commandLocker(cmd);
+    // 주인이 없는 옛 형식("RENT:2")은 누구든 가져갈 수 있게 둡니다(하위 호환).
+    if (lockerId && owner && owner !== String(lockerId)) continue;
+    sh.deleteRow(i + 2);
+    return cmd;
+  }
+  return "";
+}
+
+// "RENT:L001:2" → "L001"   /   "RENT:2" → ""
+function commandLocker(cmd) {
+  const parts = String(cmd).split(":");
+  return parts.length >= 3 ? parts[1].trim() : "";
 }
 function ensureSheetTab(name) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -466,12 +553,16 @@ function ensureColumn(name, colName) {
   t.sheet.getRange(1, t.headers.length + 1).setValue(colName);
 }
 
-function bumpAvailableSlots(lockerId, delta) {
-  const locker = findRow(TAB.lockers, "locker_id", lockerId);
-  if (!locker) return;
-  const next = Math.max(0, Number(locker.available_slots || 0) + delta);
+// 빈 슬롯 수는 더하기·빼기로 관리하면 취소·오류가 한 번 날 때마다 어긋나서
+// 앱 목록의 "3/4 대여 가능"이 실제와 달라집니다. 그래서 매번 실제로 다시 셉니다.
+function recountAvailableSlots(lockerId) {
+  if (!lockerId) return;
+  if (!findRow(TAB.lockers, "locker_id", lockerId)) return;
+  const free = sheetTable(TAB.umbrellas).rows.filter(r =>
+    String(r.locker_id) === String(lockerId) &&
+    !isNaN(parseInt(r.slot_no)) && r.status === "available").length;
   updateRow(TAB.lockers, "locker_id", lockerId,
-            { available_slots: next, last_update: new Date() });
+            { available_slots: free, last_update: new Date() });
 }
 
 function nextId(name, key, prefix) {          // R001 → R002 …
