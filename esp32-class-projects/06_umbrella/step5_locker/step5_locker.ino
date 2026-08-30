@@ -243,8 +243,15 @@ void startRent(uint8_t i) {
   const uint32_t now = millis();
 
   if (!slots[i].present) {          // 빌려줄 우산이 없음
-    Serial.printf("슬롯%u 대여불가 — 우산이 없어요\n", i + 1);
-    requestCancel(i);
+    // 서보를 아예 안 움직이고 끝나는 유일한 경로입니다. 앱에서 눌렀는데
+    // "아무 반응이 없다"면 십중팔구 여기예요 — 그래서 리드스위치 원시값까지 찍어
+    // 배선 문제인지 자석 위치 문제인지 바로 가릴 수 있게 합니다.
+    Serial.printf("슬롯%u 대여불가 — 우산이 없어요 (리드 GPIO%u=%s, 감지 기준=%s)\n",
+                  i + 1, REED_PINS[i],
+                  digitalRead(REED_PINS[i]) == HIGH ? "HIGH" : "LOW",
+                  REED_ACTIVE_LEVEL == LOW ? "LOW" : "HIGH");
+    Serial.println("  자석을 리드에 1cm 안으로 붙이고 s 를 눌러 다시 확인해보세요");
+    requestCancel(i);               // 서버의 대여 기록도 되돌립니다
     return;
   }
 
