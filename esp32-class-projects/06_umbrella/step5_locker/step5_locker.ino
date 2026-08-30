@@ -235,6 +235,15 @@ void requestReturnFailed(uint8_t i) {
 volatile bool reportPending = false;
 void requestReport() { reportPending = true; }
 
+// 통신이 살아 있는지 보여주는 값들 — 시리얼 s(상태) · n(지금 물어보기)로 확인합니다.
+// 지금까지는 명령 확인이 계속 실패해도 시리얼에 아무것도 안 나와서,
+// "WiFi 연결됨"만 보고 정상이라고 착각하기 쉬웠습니다.
+volatile uint32_t netLastOkMs   = 0;      // 마지막으로 서버가 응답한 시각
+volatile uint32_t netPollCount  = 0;      // 명령을 확인한 횟수
+volatile uint32_t netFailStreak = 0;      // 연속 실패 횟수
+volatile int      netLastCode   = 0;      // 마지막 응답 코드
+volatile bool     pingRequested = false;  // n 명령 — 지금 바로 한 번 물어보기
+
 String buildReportQuery() {
   String q = String("?action=report&locker_id=") + LOCKER_ID;
   for (uint8_t i = 0; i < SLOT_COUNT; ++i)
@@ -391,7 +400,26 @@ void updateSlotState(uint8_t i, uint32_t now) {
 void printStatus() {
   Serial.println("── 슬롯 상태 ──");
   for (uint8_t i = 0; i < SLOT_COUNT; ++i)
-    Serial.printf("  슬롯%u: 우산 %s\n", i + 1, slots[i].present ? "있음" : "없음");
+    Serial.printf("  슬롯%u: 우산 %s  (리드 GPIO%u=%s)\n", i + 1,
+                  slots[i].present ? "있음" : "없음", REED_PINS[i],
+                  digitalRead(REED_PINS[i]) == HIGH ? "HIGH" : "LOW");
+
+  Serial.println("── 통신 상태 ──");
+  if (!ENABLE_WIFI) { Serial.println("  WiFi 꺼둠 (ENABLE_WIFI = false)"); return; }
+  const bool up = (WiFi.status() == WL_CONNECTED);
+  Serial.printf("  WiFi: %s\n", up ? "연결됨" : "끊김");
+  if (netPollCount == 0) {
+    Serial.println("  서버: 아직 한 번도 확인 못 함 ← 여기서 막혀 있으면 앱 명령이 안 옵니다");
+  } else {
+    Serial.printf("  서버: 확인 %lu회 · 마지막 응답 %d · 연속실패 %lu회\n",
+                  (unsigned long)netPollCount, netLastCode, (unsigned long)netFailStreak);
+    if (netLastOkMs > 0)
+      Serial.printf("  마지막 성공: %lu초 전\n",
+                    (unsigned long)((millis() - netLastOkMs) / 1000));
+    else
+      Serial.println("  성공한 적 없음 ← 배포 URL·와이파이를 확인하세요");
+  }
+  Serial.println("  (n 을 누르면 지금 바로 서버에 한 번 물어봅니다)");
 }
 
 bool runSlotCommand(String verb, int slotNumber) {
@@ -445,6 +473,12 @@ void executeCommand(String command) {
 
   // 시리얼 단축 명령: s / r1 / b1 / o1 / c1
   if (command == "S") { printStatus(); return; }
+  if (command == "N") {                      // 지금 바로 서버에 물어보기 (진단용)
+    if (!ENABLE_WIFI) { Serial.println("ENABLE_WIFI = false 라 서버를 안 씁니다"); return; }
+    Serial.println("서버에 물어보는 중...");
+    pingRequested = true;                    // 실제 통신은 네트워크 태스크가 합니다
+    return;
+  }
   if (command.length() == 2 && isDigit(command[1])) {
     const int slot = command[1] - '0';
     switch (command[0]) {
@@ -610,6 +644,32 @@ void networkTask(void* parameter) {
       continue;
     }
 
+    // n 명령 — 지금 바로 서버에 물어보고, 무엇이 오는지 그대로 보여줍니다
+    if (pingRequested) {
+      pingRequested = false;
+      String body;
+      const uint32_t t0 = millis();
+      const int code = httpsGet(String(SERVER_URL) +
+                                "?action=cmd&probe=1&locker_id=" + LOCKER_ID, body);
+      Serial.printf("  응답 코드 %d (%lums)\n", code, (unsigned long)(millis() - t0));
+      if (code == HTTP_CODE_OK) {
+        netLastOkMs = millis();
+        netFailStreak = 0;
+        const String command = decodeCommand(body);
+        if (command.length() == 0) {
+          Serial.println("  대기 중인 명령 없음 — 서버와 통신은 정상입니다");
+          Serial.println("  (앱에서 대여를 누른 직후에 n 을 눌러 명령이 오는지 보세요)");
+        } else {
+          Serial.println("  받은 명령: " + command + " — 바로 실행합니다");
+          CommandMessage msg{};
+          command.toCharArray(msg.text, sizeof(msg.text));
+          xQueueSend(commandQueue, &msg, 0);
+        }
+      } else {
+        Serial.println("  실패" + explainError(code));
+      }
+    }
+
     // 보낼 요청이 있으면 먼저 처리 (대여 취소가 늦으면 안 되니까)
     OutboundMessage out{};
     if (xQueueReceive(outboundQueue, &out, 0) == pdTRUE) {
@@ -642,13 +702,27 @@ void networkTask(void* parameter) {
       const String url = String(SERVER_URL) + "?action=cmd&locker_id=" + LOCKER_ID +
                          "&_=" + String(now);
       const int code = httpsGet(url, body);
+      netPollCount++;
+      netLastCode = code;
       if (code == HTTP_CODE_OK) {
+        if (netFailStreak > 0) {
+          Serial.printf("명령 확인 회복됨 (%lu회 실패 뒤)\n", (unsigned long)netFailStreak);
+          netFailStreak = 0;
+        }
+        netLastOkMs = millis();
         const String command = decodeCommand(body);
         if (command.length() > 0) {
           CommandMessage msg{};
           command.toCharArray(msg.text, sizeof(msg.text));
           xQueueSend(commandQueue, &msg, 0);
         }
+      } else {
+        // 여기서 조용히 넘어가면 "WiFi는 연결됐는데 앱 명령만 안 오는" 상태가 됩니다.
+        // 첫 실패와 그 뒤 30초마다(20회) 한 번씩만 알려 시리얼을 덮지 않게 합니다.
+        netFailStreak++;
+        if (netFailStreak == 1 || netFailStreak % 20 == 0)
+          Serial.println("명령 확인 실패 " + String((unsigned long)netFailStreak) +
+                         "회 (" + String(code) + ")" + explainError(code));
       }
     }
 
@@ -709,7 +783,7 @@ void setup() {
 
   printStatus();
   Serial.println("시리얼 명령");
-  Serial.println("  r1~r4 = 대여   b1~b4 = 반납   s = 슬롯 상태");
+  Serial.println("  r1~r4 = 대여   b1~b4 = 반납   s = 슬롯·통신 상태   n = 서버 확인");
   Serial.println("  o1~o4 = 그냥 열기   c1~c4 = 그냥 닫기  (서보·전원 점검용)");
 
   if (!ENABLE_WIFI) {
