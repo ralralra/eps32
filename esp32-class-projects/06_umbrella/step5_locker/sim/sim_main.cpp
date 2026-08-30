@@ -19,6 +19,7 @@ namespace sim {
   std::string serialIn;
   ServoState servoState[40];
   bool allocatedTimer[4] = {false, false, false, false};
+  int  channelsUsed = 0;
 }
 SerialSim Serial;
 WiFiSim   WiFi;
@@ -123,10 +124,12 @@ int main() {
   bool allLocked = true;
   for (uint8_t i = 0; i < SLOT_COUNT; ++i) allLocked &= (servoAngle(i) == SERVO_CLOSED_ANGLE);
   expect(allLocked, "네 칸이 모두 잠김 각도로 이동");
-  bool allDetached = true;
+  bool asConfigured = true;
   for (uint8_t i = 0; i < SLOT_COUNT; ++i)
-    allDetached &= !sim::servoState[SERVO_PINS[i]].attached;
-  expect(allDetached, "다 움직인 뒤 힘을 뺌 (detach)");
+    asConfigured &= (sim::servoState[SERVO_PINS[i]].attached == !RELEASE_WHEN_IDLE);
+  expect(asConfigured, RELEASE_WHEN_IDLE
+                       ? "다 움직인 뒤 힘을 뺌 (RELEASE_WHEN_IDLE = true)"
+                       : "붙인 채로 유지 — 다음 명령에서 다시 attach하지 않도록");
   for (uint8_t i = 0; i < SLOT_COUNT; ++i) lastAngle[i] = servoAngle(i);
 
   // ───────────────────────────────────────────────────────────
@@ -228,10 +231,30 @@ int main() {
   flush();
 
   // ───────────────────────────────────────────────────────────
-  title("8. PWM 타이머를 안 잡았을 때 (고치기 전 코드 재현)");
+  title("8. 오래 써도 계속 움직이나 — PWM 채널 고갈 재현");
+  resetAll();
+  std::printf("   (붙였다 뗐다 하면 채널이 말라 attach가 실패하는 라이브러리를 흉내냅니다)\n");
+  bool everyCycleMoved = true;
+  for (int cycle = 1; cycle <= 12; ++cycle) {
+    traceServo = false;
+    serialCmd("o1"); advance(SERVO_MOVE_MS + 100);
+    if (servoAngle(0) != SERVO_OPEN_ANGLE) everyCycleMoved = false;
+    serialCmd("c1"); advance(SERVO_MOVE_MS + 100);
+    if (servoAngle(0) != SERVO_CLOSED_ANGLE) everyCycleMoved = false;
+  }
+  traceServo = true;
+  for (uint8_t i = 0; i < SLOT_COUNT; ++i) lastAngle[i] = servoAngle(i);
+  sim::serialOut.clear();
+  expect(everyCycleMoved, "12번 여닫아도 매번 실제로 움직임 (채널이 마르지 않음)");
+  std::printf("   ℹ 쓴 채널 %d개 / 한도 %d개 — 슬롯마다 한 번씩만 붙였다는 뜻\n",
+              sim::channelsUsed, sim::CHANNEL_LIMIT);
+
+  // ───────────────────────────────────────────────────────────
+  title("9. PWM 타이머를 안 잡았을 때 (고치기 전 코드 재현)");
   resetAll();
   for (bool& t : sim::allocatedTimer) t = false;      // allocateTimer를 안 부른 상태
   for (uint8_t i = 0; i < SLOT_COUNT; ++i) servos[i].detach();
+  sim::channelsUsed = 0;
   lastAngle[0] = servoAngle(0);
   const int beforeNoTimer = servoAngle(0);
   serialCmd("o1");

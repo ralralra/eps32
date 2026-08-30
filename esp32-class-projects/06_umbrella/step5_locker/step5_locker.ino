@@ -80,9 +80,13 @@ constexpr int SERVO_OPEN_ANGLE   = 0;       // 열림
 constexpr int SERVO_MIN_PULSE_US = 500;
 constexpr int SERVO_MAX_PULSE_US = 2400;
 
-// 다 움직인 서보의 힘을 빼둘지 — 전류·떨림·발열이 크게 줍니다.
-// 문이 저절로 내려앉으면 false로 바꾸세요(대신 전원이 넉넉해야 합니다).
-constexpr bool RELEASE_WHEN_IDLE = true;
+// 다 움직인 뒤 서보의 힘을 뺄지(detach) — 전류·떨림·발열은 줄지만,
+// ⚠ ESP32Servo 일부 버전은 detach할 때 PWM 채널을 반납하지 않습니다.
+//   그러면 다음에 attach가 실패해서 "열림"만 찍히고 서보는 안 움직여요.
+//   (실제로 겪은 증상: 부팅 때 네 칸을 붙였다 떼고 나면 그다음 명령부터 전부 실패)
+//   그래서 기본은 false — setup에서 한 번만 붙이고 계속 붙여둡니다.
+//   서보가 뜨겁거나 계속 떠는 게 더 문제라면 true로 바꿔보되, 위 증상을 확인하세요.
+constexpr bool RELEASE_WHEN_IDLE = false;
 
 // ─────────────────────────────────────────────────────────────
 // 3. 시간 설정
@@ -161,14 +165,22 @@ bool hasElapsed(uint32_t now, uint32_t since, uint32_t duration) {
 bool readReed(uint8_t i) { return digitalRead(REED_PINS[i]) == REED_ACTIVE_LEVEL; }
 
 // 서보는 붙어 있는 동안 계속 힘을 씁니다. 움직일 때만 붙이고 끝나면 뗍니다.
+// attach가 실패하면 write는 조용히 아무 일도 안 합니다. 서보는 전혀 안 움직이는데
+// 시리얼에는 "열림"만 찍히는 상황이 되므로, 실패를 반드시 알려줍니다.
+bool attachServo(uint8_t i) {
+  if (servos[i].attached()) return true;
+  servos[i].setPeriodHertz(50);
+  if (servos[i].attach(SERVO_PINS[i], SERVO_MIN_PULSE_US, SERVO_MAX_PULSE_US) != 0)
+    return true;
+  Serial.printf("⚠ 슬롯%u 서보 연결 실패 — GPIO%u에 PWM을 못 잡았어요\n",
+                i + 1, SERVO_PINS[i]);
+  if (RELEASE_WHEN_IDLE)
+    Serial.println("  RELEASE_WHEN_IDLE을 false로 두면(기본값) 이 문제가 없어집니다");
+  return false;
+}
+
 void moveServo(uint8_t i, bool open) {
-  if (!servos[i].attached()) {
-    // attach가 실패하면 write는 조용히 아무 일도 안 합니다. 서보는 전혀 안 움직이는데
-    // 시리얼에는 "열림"만 찍히는 상황이 되므로, 실패를 반드시 알려줍니다.
-    if (servos[i].attach(SERVO_PINS[i], SERVO_MIN_PULSE_US, SERVO_MAX_PULSE_US) == 0)
-      Serial.printf("⚠ 슬롯%u 서보 연결 실패 — GPIO%u에 PWM을 못 잡았어요\n",
-                    i + 1, SERVO_PINS[i]);
-  }
+  attachServo(i);
   servos[i].write(open ? SERVO_OPEN_ANGLE : SERVO_CLOSED_ANGLE);
   slots[i].servoOpen    = open;
   slots[i].servoBusy    = true;
@@ -773,7 +785,9 @@ void setup() {
     slots[i].rawChangedAt = millis();
     slots[i].stateSince   = millis();
 
-    servos[i].setPeriodHertz(50);
+    // 여기서 한 번 붙여두고 계속 씁니다 — 붙였다 뗐다 하면 채널이 모자라
+    // 다음 attach가 실패할 수 있어서(위 RELEASE_WHEN_IDLE 설명 참고)
+    attachServo(i);
     Serial.printf("슬롯%u 잠금\n", i + 1);
     moveServo(i, false);
     delay(SERVO_MOVE_MS);                       // 다 움직일 때까지 기다렸다가
