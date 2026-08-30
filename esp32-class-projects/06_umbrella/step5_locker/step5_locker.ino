@@ -155,8 +155,13 @@ bool readReed(uint8_t i) { return digitalRead(REED_PINS[i]) == REED_ACTIVE_LEVEL
 
 // 서보는 붙어 있는 동안 계속 힘을 씁니다. 움직일 때만 붙이고 끝나면 뗍니다.
 void moveServo(uint8_t i, bool open) {
-  if (!servos[i].attached())
-    servos[i].attach(SERVO_PINS[i], SERVO_MIN_PULSE_US, SERVO_MAX_PULSE_US);
+  if (!servos[i].attached()) {
+    // attach가 실패하면 write는 조용히 아무 일도 안 합니다. 서보는 전혀 안 움직이는데
+    // 시리얼에는 "열림"만 찍히는 상황이 되므로, 실패를 반드시 알려줍니다.
+    if (servos[i].attach(SERVO_PINS[i], SERVO_MIN_PULSE_US, SERVO_MAX_PULSE_US) == 0)
+      Serial.printf("⚠ 슬롯%u 서보 연결 실패 — GPIO%u에 PWM을 못 잡았어요\n",
+                    i + 1, SERVO_PINS[i]);
+  }
   servos[i].write(open ? SERVO_OPEN_ANGLE : SERVO_CLOSED_ANGLE);
   slots[i].servoOpen    = open;
   slots[i].servoBusy    = true;
@@ -667,6 +672,14 @@ void setup() {
 
   // 네 칸을 한 개씩 차례로 잠급니다 — 동시에 움직이면 전류가 확 튀어
   // 약한 전원에서는 보드가 리셋됩니다.
+  // ★ ESP32Servo는 쓸 수 있는 PWM 타이머를 미리 잡아두어야 합니다.
+  //   이게 없으면 라이브러리 버전에 따라 attach()가 조용히 실패해서
+  //   "열림"은 찍히는데 서보가 하나도 안 움직입니다. 서보 4개면 특히 잘 걸려요.
+  ESP32PWM::allocateTimer(0);
+  ESP32PWM::allocateTimer(1);
+  ESP32PWM::allocateTimer(2);
+  ESP32PWM::allocateTimer(3);
+
   Serial.println("네 칸을 차례로 잠급니다...");
   for (uint8_t i = 0; i < SLOT_COUNT; ++i) {
     pinMode(REED_PINS[i], INPUT_PULLUP);
